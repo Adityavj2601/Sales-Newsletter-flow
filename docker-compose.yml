@@ -1,0 +1,12 @@
+services:
+  brief-studio:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      APP_SECRET: ${APP_SECRET:-}
+      CRON_KEY: ${CRON_KEY:-}
+    volumes:
+      - ./data:/data

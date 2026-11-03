@@ -1,0 +1,28 @@
+{
+  "name": "sales-newsletter-flow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-curated weekly sales newsletter studio: draft, check, approve and send editions over web link, email and WhatsApp, and capture one-tap intent.",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "cron-parser": "5.10.2",
+    "fast-xml-parser": "5.11.2",
+    "next": "15.5.27",
+    "nodemailer": "7.0.13",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/nodemailer": "6.4.24",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "typescript": "5.9.3"
+  }
+}
