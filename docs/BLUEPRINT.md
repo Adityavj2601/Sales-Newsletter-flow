@@ -227,6 +227,7 @@ CTA BAR    See it in action · I'd like early access · Share · Not now
 
 | Screen | What you do there |
 |---|---|
+| **Product switcher** (top bar) | Choose which product you're working on (Unada / HeyVeya). Each product has its own brand kit, knowledge base, audience and newsletter name, and shares the industry story pool |
 | **Home** | This week's edition status, next scheduled job, hot leads, last edition's stats |
 | **Editions** | List of all editions (Draft → In review → Approved → Scheduled → Sent) |
 | **Editor** | 3 panes: **block list** · **live preview** (Web / Email / WhatsApp / preview-card toggle) · **AI copilot + pre-flight checks** |
