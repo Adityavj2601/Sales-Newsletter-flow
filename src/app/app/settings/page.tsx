@@ -2,192 +2,325 @@ import Link from 'next/link';
 import { all, DATA_DIR } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
 import { activeProduct } from '@/lib/context';
-import { getSetting, listProducts, providerKey, PROVIDERS, smtpPass, waToken, baseUrl } from '@/lib/settings';
+import { getSetting, listProducts, providerKey, PROVIDERS, baseUrl } from '@/lib/settings';
 import { MODEL_DEFAULTS, PROVIDER_LABEL, tokensThisMonth, routeFor } from '@/lib/ai/providers';
 import { mask } from '@/lib/crypto';
 import { WEEKDAYS, num, fmtDate } from '@/lib/format';
 import { Submit, Copy, Confirm } from '@/components/ui';
+import { Icon, Tile } from '@/components/content/icons';
+import { Group, Row, Callout } from '@/components/content/grouped';
+import { SaveBar, SecretField, SettingsNav, BrandColors, MemberRow } from '@/components/content/controls';
 import { TestButton } from './Test';
 import * as A from '../actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Settings' };
 
-const ALL_TABS = [['general', 'General'], ['products', 'Products & brand'], ['ai', 'AI providers'], ['email', 'Email sending'], ['whatsapp', 'WhatsApp'], ['alerts', 'Alerts & CRM'], ['team', 'Team'], ['data', 'Data']] as const;
-const TASKS = [['draft', 'Write editions', 'Your best writing model'], ['edit', 'Copilot edits', 'Usually the same as writing'], ['fast', 'Score stories & subject lines', 'A fast, cheap model'], ['factcheck', 'Fact check', 'Auto picks a different company from the writer']] as const;
+const ALL_TABS = [
+  { key: 'general', label: 'General', icon: 'gear', tone: 'gray', desc: 'Your public address, time zone and the default send slot.' },
+  { key: 'products', label: 'Products & brand', icon: 'palette', tone: 'pink', desc: 'Each product has its own newsletter, voice, colours and sender.' },
+  { key: 'ai', label: 'AI providers', icon: 'sparkles', tone: 'purple', desc: 'Connect one or more AI providers and choose which model does what.' },
+  { key: 'email', label: 'Email sending', icon: 'envelope', tone: 'blue', desc: 'Connect an SMTP service. Until then, every email waits safely in the Outbox.' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: 'chat', tone: 'green', desc: 'Share by link today, or send through the WhatsApp Business Cloud API.' },
+  { key: 'alerts', label: 'Alerts & CRM', icon: 'bell', tone: 'red', desc: 'Who hears about it the moment a reader taps “I’m interested”.' },
+  { key: 'team', label: 'Team', icon: 'people', tone: 'indigo', desc: 'Who can sign in, and what they’re allowed to change.' },
+  { key: 'data', label: 'Data', icon: 'database', tone: 'graphite', desc: 'Exports, backups and the scheduler.' },
+];
+const TASKS = [['draft', 'Write editions', 'Your best writing model'], ['edit', 'Copilot edits', 'Usually the same as writing'], ['fast', 'Score stories & subject lines', 'A fast, inexpensive model'], ['factcheck', 'Fact check', 'Auto picks a different company from the writer']] as const;
+const PROVIDER_MARK: Record<string, string> = { anthropic: 'A', openai: 'O', gemini: 'G', openrouter: 'OR' };
+const KEY_HINT: Record<string, string> = { anthropic: 'sk-ant-…', openai: 'sk-…', gemini: 'AIza…', openrouter: 'sk-or-…' };
 
-export default async function Settings({ searchParams }: { searchParams: Promise<{ tab?: string; p?: string }> }) {
+export default async function Settings({ searchParams }: { searchParams: Promise<{ tab?: string; p?: string; new?: string }> }) {
   const me = await requireUser();
   const sp = await searchParams;
-  const TABS = me.role === 'admin' ? ALL_TABS : ALL_TABS.filter(([k]) => k === 'team');
-  const tab = me.role === 'admin' ? sp.tab || 'general' : 'team';
+  const TABS = me.role === 'admin' ? ALL_TABS : ALL_TABS.filter((t) => t.key === 'team');
+  const tab = me.role === 'admin' ? (TABS.some((t) => t.key === sp.tab) ? sp.tab! : 'general') : 'team';
+  const meta = TABS.find((t) => t.key === tab)!;
   const g = getSetting('general');
+
   return (
-    <div className="stack" style={{ gap: 18 }}>
-      <div className="ph"><div><h1>Settings</h1>{me.role !== 'admin' && <p className="sub">You’re an editor. Only admins can change products, AI keys, sending and alerts; you can change your own password here.</p>}</div></div>
-      <div className="tabs">{TABS.map(([k, l]) => <Link key={k} href={`/app/settings?tab=${k}`} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</div>
+    <div className="se">
+      <div className="ph se-ph"><div><h1>Settings</h1>{me.role !== 'admin' && <p className="sub">You’re an editor. Only admins can change products, AI keys, sending and alerts; you can change your own password here.</p>}</div></div>
+      <div className="se-shell">
+        <SettingsNav items={TABS.map(({ key, label, icon, tone }) => ({ key, label, icon, tone }))} current={tab} />
+        <div className="se-pane" key={tab}>
+          <header className="se-head">
+            <Tile icon={meta.icon} tone={meta.tone} size="lg" />
+            <div><h2>{meta.label}</h2><p>{meta.desc}</p></div>
+          </header>
 
-      {tab === 'general' && (
-        <form action={A.saveGeneral} className="card form-grid">
-          <label className="f"><span>App name</span><input className="in" name="appName" defaultValue={g.appName} /></label>
-          <label className="f"><span>Public web address</span><input className="in" name="publicBaseUrl" type="url" defaultValue={g.publicBaseUrl} placeholder="https://brief.yourdomain.com" /><small>Every link, preview image and tracking pixel uses this. Now: {baseUrl()}</small></label>
-          <label className="f"><span>Time zone</span><select className="in" name="timezone" defaultValue={g.timezone}>{['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'UTC'].map((z) => <option key={z}>{z}</option>)}</select></label>
-          <label className="f"><span>Default send day</span><select className="in" name="sendDay" defaultValue={g.sendDay}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>
-          <label className="f"><span>Default send time</span><input className="in" name="sendTime" type="time" defaultValue={g.sendTime} /><small>Tue–Thu mornings usually get the best B2B reading.</small></label>
-          <label className="f"><span>Emails per minute</span><input className="in" name="emailsPerMinute" type="number" min={1} max={600} defaultValue={g.emailsPerMinute} /><small>Start low (20–30) on a new sending domain.</small></label>
-          <div className="full"><Submit>Save</Submit></div>
-        </form>
-      )}
-
-      {tab === 'products' && <ProductsTab sel={sp.p} />}
-      {tab === 'ai' && <AiTab />}
-
-      {tab === 'email' && (() => {
-        const s = getSetting('smtp');
-        return (
-          <div className="stack">
-            <div className="notice">Use any SMTP service: Amazon SES, Brevo, Resend, Postmark (broadcast stream), Zoho, or Google Workspace for small lists. Send from a sub-domain like <code>news.yourdomain.com</code> with SPF, DKIM and DMARC set up, and warm it up slowly. Until SMTP is connected, emails go to the Outbox.</div>
-            <form action={A.saveSMTP} className="card form-grid">
-              <label className="f"><span>SMTP host</span><input className="in" name="host" defaultValue={s.host} placeholder="email-smtp.ap-south-1.amazonaws.com" /></label>
-              <label className="f"><span>Port</span><input className="in" name="port" type="number" defaultValue={s.port} /></label>
-              <label className="f"><span>Username</span><input className="in" name="user" defaultValue={s.user} autoComplete="off" /></label>
-              <label className="f"><span>Password {s.pass ? `(saved: ••••••••)` : ''}</span><input className="in" name="pass" type="password" autoComplete="new-password" placeholder={s.pass ? 'Leave empty to keep' : ''} /></label>
-              <label className="f full"><span>Default From</span><input className="in" name="from" defaultValue={s.from} placeholder={'"Team Unada" <brief@news.unada.io>'} /><small>Each product can override the sender name and address in Products & brand.</small></label>
-              <label className="check"><input type="checkbox" name="secure" defaultChecked={s.secure} /><span>Use SSL/TLS from the start (port 465)</span></label>
-              {s.pass && <label className="check"><input type="checkbox" name="clear_pass" /><span>Remove saved password</span></label>}
-              <div className="full row"><Submit>Save</Submit><TestButton what="smtp" label="Test connection" /></div>
+          {tab === 'general' && (
+            <form action={A.saveGeneral} className="se-form">
+              <Group title="App">
+                <Row label="App name"><input className="in" name="appName" defaultValue={g.appName} /></Row>
+                <Row label="Public web address" sub={<>Every link, preview image and tracking pixel uses this. Now <span className="mono">{baseUrl()}</span></>}>
+                  <input className="in" name="publicBaseUrl" type="url" defaultValue={g.publicBaseUrl} placeholder="https://brief.yourdomain.com" />
+                </Row>
+              </Group>
+              <Group title="Sending" footer="Tuesday to Thursday mornings usually get the best B2B reading. Start at 20–30 emails a minute on a new sending domain.">
+                <Row label="Time zone"><select className="in" name="timezone" defaultValue={g.timezone}>{['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'UTC'].map((z) => <option key={z}>{z}</option>)}</select></Row>
+                <Row as="div" label="Default send slot" sub="New editions are planned for this day and time.">
+                  <span className="se-pair">
+                    <select className="in" name="sendDay" aria-label="Default send day" defaultValue={g.sendDay}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
+                    <input className="in" name="sendTime" type="time" aria-label="Default send time" defaultValue={g.sendTime} />
+                  </span>
+                </Row>
+                <Row label="Emails per minute" sub="Sending pace, 1–600."><input className="in se-num" name="emailsPerMinute" type="number" min={1} max={600} defaultValue={g.emailsPerMinute} /></Row>
+              </Group>
+              <SaveBar />
             </form>
-          </div>
-        );
-      })()}
+          )}
 
-      {tab === 'whatsapp' && (() => {
-        const w = getSetting('whatsapp');
-        return (
-          <div className="stack">
-            <div className="card prose">
-              <h2 style={{ marginTop: 0 }}>Three ways to send on WhatsApp</h2>
-              <ol>
-                <li><b>Copy the link</b> and send it yourself. Works today.</li>
-                <li><b>Click-to-chat list</b> on each edition’s Send page: WhatsApp opens with the personal message filled in. Works today, no setup.</li>
-                <li><b>WhatsApp Business Cloud API</b> (below): send an approved Marketing template to everyone with WhatsApp consent, with “Interested” / “Not right now” buttons inside WhatsApp. Needs a Meta Business account, a dedicated number and an approved template. Meta charges per marketing message.</li>
-              </ol>
-              <p className="hint">Never use unofficial bulk-sender tools; they get numbers banned.</p>
+          {tab === 'products' && <ProductsTab sel={sp.p} showNew={!!sp.new} />}
+          {tab === 'ai' && <AiTab />}
+
+          {tab === 'email' && (() => {
+            const s = getSetting('smtp');
+            return (
+              <div className="se-stack">
+                <Callout icon="info">Use any SMTP service: Amazon SES, Brevo, Resend, Postmark (broadcast stream), Zoho, or Google Workspace for small lists. Send from a sub-domain like <code>news.yourdomain.com</code> with SPF, DKIM and DMARC set up, and warm it up slowly.</Callout>
+                <form action={A.saveSMTP} className="se-form">
+                  <Group title="Server">
+                    <Row label="SMTP host"><input className="in" name="host" defaultValue={s.host} placeholder="email-smtp.ap-south-1.amazonaws.com" /></Row>
+                    <Row label="Port" sub="587 for STARTTLS, 465 for SSL."><input className="in se-num" name="port" type="number" defaultValue={s.port} /></Row>
+                    <Row label="Use SSL/TLS from the start" sub="Turn on for port 465."><input type="checkbox" role="switch" className="toggle" name="secure" defaultChecked={s.secure} /></Row>
+                  </Group>
+                  <Group title="Sign in">
+                    <Row label="Username"><input className="in" name="user" defaultValue={s.user} autoComplete="off" /></Row>
+                    <Row as="div" label="Password" sub={s.pass ? 'Saved and encrypted.' : undefined}><SecretField name="pass" clearName="clear_pass" saved={!!s.pass} label="SMTP password" /></Row>
+                  </Group>
+                  <Group title="Sender" footer="Each product can override the sender name and address in Products & brand.">
+                    <Row label="Default From"><input className="in" name="from" defaultValue={s.from} placeholder={'"Team Unada" <brief@news.unada.io>'} /></Row>
+                  </Group>
+                  <Group title="Check">
+                    <Row as="div" label="Test connection" sub="Signs in with the saved settings. Save first."><TestButton what="smtp" label="Test connection" /></Row>
+                  </Group>
+                  <SaveBar />
+                </form>
+              </div>
+            );
+          })()}
+
+          {tab === 'whatsapp' && (() => {
+            const w = getSetting('whatsapp');
+            const hook = `${baseUrl()}/api/wa/webhook`;
+            return (
+              <div className="se-stack">
+                <div className="se-ways">
+                  {[
+                    ['link', 'Copy the link', 'Send the edition link yourself, in any chat.', 'Works today'],
+                    ['chat', 'Click-to-chat list', 'On each edition’s Send page, WhatsApp opens with the personal message filled in.', 'Works today'],
+                    ['bolt', 'Business Cloud API', 'Send an approved template to everyone with WhatsApp consent, with Interested / Not right now buttons. Needs a Meta Business account; Meta charges per message.', 'Set up below'],
+                  ].map(([ic, t, d, s], i) => (
+                    <div key={t} className="se-way"><span className="se-way-n">{i + 1}</span><Icon name={ic} size={18} /><b>{t}</b><p>{d}</p><span className={`pill ${i < 2 ? 'ok' : 'info'}`}>{s}</span></div>
+                  ))}
+                </div>
+                <p className="se-fine"><Icon name="warn" size={13} />Never use unofficial bulk-sender tools; they get numbers banned.</p>
+                <form action={A.saveWA} className="se-form">
+                  <Group title="Business account">
+                    <Row label="Phone number ID"><input className="in mono" name="phoneNumberId" defaultValue={w.phoneNumberId} /></Row>
+                    <Row label="Business Account ID" sub="WABA ID"><input className="in mono" name="wabaId" defaultValue={w.wabaId} /></Row>
+                    <Row as="div" label="Permanent access token"><SecretField name="token" clearName="clear_token" saved={!!w.token} label="WhatsApp access token" /></Row>
+                    <Row as="div" label="Meta App Secret" sub="From Meta app → Settings → Basic. Checks that webhook calls really come from Meta."><SecretField name="appSecret" saved={!!w.appSecret} label="Meta App Secret" /></Row>
+                    <Row label="Graph API version"><input className="in mono se-num" name="apiVersion" defaultValue={w.apiVersion} /></Row>
+                  </Group>
+                  <Group title="Message template">
+                    <Row label="Template name"><input className="in mono" name="templateName" defaultValue={w.templateName} placeholder="weekly_brief" /></Row>
+                    <Row label="Language"><input className="in mono se-num" name="templateLang" defaultValue={w.templateLang} placeholder="en" /></Row>
+                    <Row label="Body variables, in order" sub={<>From first_name, title, dek, link, newsletter. Must match {'{{1}}, {{2}}…'} in your template.</>}><input className="in mono" name="bodyParams" defaultValue={w.bodyParams} /></Row>
+                    <Row label="Buttons" sub={<>URL buttons: set the template URL to <span className="mono">{baseUrl()}/e/{'{{1}}'}</span></>}>
+                      <select className="in" name="button" defaultValue={w.button}><option value="quick_reply">Interested / Not right now</option><option value="url">One URL button</option><option value="none">No buttons</option></select>
+                    </Row>
+                    <Row label="Image header" sub="We send the edition’s preview image."><input type="checkbox" role="switch" className="toggle" name="headerImage" defaultChecked={w.headerImage} /></Row>
+                  </Group>
+                  <Group title="Webhook" footer="In Meta’s app settings, paste these and subscribe to the “messages” field. Used for delivery status and button taps.">
+                    <Row as="div" label="Callback URL"><span className="se-copy"><code>{hook}</code><Copy text={hook} /></span></Row>
+                    <Row as="div" label="Verify token"><span className="se-copy"><code>{w.verifyToken || 'Created on first save'}</code>{w.verifyToken && <Copy text={w.verifyToken} />}<input type="hidden" name="verifyToken" value={w.verifyToken} /></span></Row>
+                  </Group>
+                  <Group title="Check">
+                    <Row as="div" label="Send a test message" sub="Uses the saved settings. Save first."><TestButton what="wa" label="Send test" needsInput="+91 98xxx xxxxx" /></Row>
+                  </Group>
+                  <SaveBar />
+                </form>
+              </div>
+            );
+          })()}
+
+          {tab === 'alerts' && (() => {
+            const a = getSetting('alerts');
+            return (
+              <form action={A.saveAlerts} className="se-form">
+                <Group title="Email" footer="An email the moment someone taps “I’m interested” or “Book 15 min”, plus the Friday report. Each product can add its own address too.">
+                  <Row label="Alert emails" sub="Comma separated."><input className="in" name="alertEmails" defaultValue={a.alertEmails} placeholder="sales@yourdomain.com" /></Row>
+                </Group>
+                <Group title="Integrations" footer="The CRM webhook receives JSON for every intent tap: contact, edition, action and note. Use it to create deals in HubSpot, Zoho or Apollo.">
+                  <Row label={<span className="se-lbl-i"><Icon name="slack" size={15} />Slack incoming webhook</span>} sub="Optional"><input className="in" name="slackWebhook" defaultValue={a.slackWebhook} placeholder="https://hooks.slack.com/services/…" /></Row>
+                  <Row label={<span className="se-lbl-i"><Icon name="webhook" size={15} />CRM / automation webhook</span>} sub="Optional. Zapier, Make, n8n or HubSpot."><input className="in" name="webhookUrl" defaultValue={a.webhookUrl} placeholder="https://hooks.zapier.com/…" /></Row>
+                </Group>
+                <Group title="Check">
+                  <Row as="div" label="Send a test alert" sub="Goes to every saved channel. Save first."><TestButton what="alert" label="Send test alert" /></Row>
+                </Group>
+                <SaveBar />
+              </form>
+            );
+          })()}
+
+          {tab === 'team' && (() => {
+            const users = all('SELECT id, email, name, role, created_at FROM users ORDER BY created_at');
+            return (
+              <div className="se-stack">
+                <section className="cx-group">
+                  <h3 className="cx-group-h">Members<span className="cx-group-n">{users.length}</span></h3>
+                  <ul className="cx-group-box se-members">
+                    {users.map((u) => {
+                      const manage = u.id !== me.id && me.role === 'admin';
+                      const initials = String(u.name || u.email).split(/\s+/).map((x: string) => x[0]).join('').slice(0, 2).toUpperCase();
+                      const hue = [...String(u.email)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+                      return (
+                        <MemberRow key={u.id} name={u.name}
+                          top={<>
+                            <span className="se-avatar" style={{ ['--h' as any]: hue }} aria-hidden>{initials}</span>
+                            <span className="se-member-i"><b>{u.name}{u.id === me.id && <span className="se-you">You</span>}</b><small>{u.email} · added {fmtDate(u.created_at)}</small></span>
+                            <span className={`pill ${u.role === 'admin' ? 'info' : ''}`}>{u.role === 'admin' ? 'Admin' : 'Editor'}</span>
+                          </>}
+                          actions={manage ? <Confirm action={A.deleteUser.bind(null, u.id)} label="Remove" confirmLabel="Remove" className="btn sm ghost cx-danger-text" /> : undefined}
+                          reset={manage ? (
+                            <form action={A.resetUserPassword} className="se-inline">
+                              <input type="hidden" name="id" value={u.id} />
+                              <input className="in" name="password" type="password" minLength={8} required placeholder="New password (8+ characters)" aria-label={`New password for ${u.name}`} autoComplete="new-password" autoFocus />
+                              <Submit className="btn sm primary" pending="…">Set password</Submit>
+                              <small className="hint">They’ll be signed out everywhere.</small>
+                            </form>
+                          ) : undefined}
+                        />
+                      );
+                    })}
+                  </ul>
+                </section>
+                {me.role === 'admin' && (
+                  <form action={A.addUser} className="se-form">
+                    <Group title="Add a teammate" footer="Share the temporary password with them privately.">
+                      <Row label="Name"><input className="in" name="name" placeholder="Priya Nair" /></Row>
+                      <Row label="Email"><input className="in" name="email" type="email" required placeholder="priya@yourdomain.com" /></Row>
+                      <Row label="Temporary password" sub="At least 8 characters."><input className="in" name="password" type="password" minLength={8} required autoComplete="new-password" /></Row>
+                      <Row label="Role"><select className="in" name="role"><option value="editor">Editor: write, edit, send</option><option value="admin">Admin: also settings & keys</option></select></Row>
+                    </Group>
+                    <div className="se-actions"><Submit><Icon name="plus" size={15} strokeWidth={2.2} />Add teammate</Submit></div>
+                  </form>
+                )}
+                <form action={A.changeMyPassword} className="se-form">
+                  <Group title="Your password" footer="Other devices are signed out when you change it.">
+                    <Row label="Current password"><input className="in" name="current" type="password" required autoComplete="current-password" /></Row>
+                    <Row label="New password" sub="At least 8 characters."><input className="in" name="password" type="password" minLength={8} required autoComplete="new-password" /></Row>
+                  </Group>
+                  <div className="se-actions"><Submit>Change password</Submit></div>
+                </form>
+              </div>
+            );
+          })()}
+
+          {tab === 'data' && (
+            <div className="se-stack">
+              <section className="cx-group">
+                <h3 className="cx-group-h">Exports</h3>
+                <div className="cx-group-box">
+                  {[
+                    ['contacts', 'Contacts', 'Everyone, with consent and tags', 'people', 'blue'],
+                    ['leads', 'Leads', 'Readers who showed intent, with scores', 'bolt', 'orange'],
+                    ['events', 'All events', 'Every open, click and tap', 'chart', 'green'],
+                    ['backup', 'Database backup', 'A full SQLite copy', 'database', 'graphite'],
+                  ].map(([t, l, s, ic, tone]) => (
+                    <a key={t} className="cx-row se-link" href={`/api/export?type=${t}`}>
+                      <span className="cx-row-l se-link-l"><Tile icon={ic} tone={tone} size="sm" /><span><span className="cx-row-t">{l}</span><small className="cx-row-s">{s}</small></span></span>
+                      <span className="se-link-r">{t === 'backup' ? 'Download' : 'CSV'}<Icon name="download" size={16} /></span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+              <Group title="Storage" footer={<>The SQLite database, uploads and the encryption key all live here. Back up this folder: without <code>secret.key</code> (or APP_SECRET) saved API keys can’t be decrypted.</>}>
+                <Row as="div" label="Data folder"><span className="se-copy"><code>{DATA_DIR}</code><Copy text={DATA_DIR} /></span></Row>
+              </Group>
+              <Group title="Scheduler" footer={<>The app checks jobs and the send queue every minute while it runs. If your host sleeps (serverless), set <code>CRON_KEY</code> and call this address every minute from a cron service.</>}>
+                <Row as="div" label="External cron URL"><span className="se-copy"><code>{baseUrl()}/api/cron?key=YOUR_CRON_KEY</code><Copy text={`${baseUrl()}/api/cron?key=YOUR_CRON_KEY`} /></span></Row>
+              </Group>
             </div>
-            <form action={A.saveWA} className="card form-grid">
-              <label className="f"><span>Phone number ID</span><input className="in" name="phoneNumberId" defaultValue={w.phoneNumberId} /></label>
-              <label className="f"><span>WhatsApp Business Account ID</span><input className="in" name="wabaId" defaultValue={w.wabaId} /></label>
-              <label className="f"><span>Permanent access token {w.token ? `(saved: ••••••••)` : ''}</span><input className="in" name="token" type="password" autoComplete="new-password" placeholder={w.token ? 'Leave empty to keep' : ''} /></label>
-              <label className="f"><span>Meta App Secret {w.appSecret ? '(saved)' : ''}</span><input className="in" name="appSecret" type="password" autoComplete="new-password" placeholder={w.appSecret ? 'Leave empty to keep' : 'From Meta app → Settings → Basic'} /><small>Used to check that webhook calls really come from Meta.</small></label>
-              <label className="f"><span>Graph API version</span><input className="in" name="apiVersion" defaultValue={w.apiVersion} /></label>
-              <label className="f"><span>Template name</span><input className="in" name="templateName" defaultValue={w.templateName} placeholder="weekly_brief" /></label>
-              <label className="f"><span>Template language</span><input className="in" name="templateLang" defaultValue={w.templateLang} placeholder="en" /></label>
-              <label className="f"><span>Body variables, in order</span><input className="in" name="bodyParams" defaultValue={w.bodyParams} /><small>Comma list from: first_name, title, dek, link, newsletter. Must match {'{{1}}, {{2}}…'} in your template.</small></label>
-              <label className="f"><span>Buttons in the template</span><select className="in" name="button" defaultValue={w.button}><option value="quick_reply">Two quick replies: Interested / Not right now</option><option value="url">One URL button with dynamic suffix</option><option value="none">No buttons</option></select><small>URL buttons: set the template URL to {baseUrl()}/e/{'{{1}}'}.</small></label>
-              <label className="check"><input type="checkbox" name="headerImage" defaultChecked={w.headerImage} /><span>Template has an image header (we send the edition’s preview image)</span></label>
-              {w.token && <label className="check"><input type="checkbox" name="clear_token" /><span>Remove saved token</span></label>}
-              <div className="full"><hr /><b>Webhook</b> (for delivery status and button taps). In Meta’s app settings use:
-                <div className="row" style={{ marginTop: 6 }}><code>{baseUrl()}/api/wa/webhook</code><Copy text={`${baseUrl()}/api/wa/webhook`} /></div>
-                <div className="row" style={{ marginTop: 6 }}>Verify token: <code>{w.verifyToken || '(saved on first save)'}</code><input type="hidden" name="verifyToken" value={w.verifyToken} /></div>
-                <div className="hint">Subscribe to the “messages” field.</div></div>
-              <div className="full row"><Submit>Save</Submit><TestButton what="wa" label="Send test to…" needsInput="Phone with country code" /></div>
-            </form>
-          </div>
-        );
-      })()}
-
-      {tab === 'alerts' && (() => {
-        const a = getSetting('alerts');
-        return (
-          <form action={A.saveAlerts} className="card form-grid">
-            <label className="f full"><span>Alert emails (comma separated)</span><input className="in" name="alertEmails" defaultValue={a.alertEmails} /><small>Get an email the moment someone taps “I’m interested” or “Book 15 min”, plus the Friday report. Each product can add its own address too.</small></label>
-            <label className="f full"><span>Slack incoming webhook (optional)</span><input className="in" name="slackWebhook" defaultValue={a.slackWebhook} placeholder="https://hooks.slack.com/services/…" /></label>
-            <label className="f full"><span>CRM / automation webhook (optional)</span><input className="in" name="webhookUrl" defaultValue={a.webhookUrl} placeholder="https://hooks.zapier.com/… or a Make / n8n / HubSpot workflow URL" /><small>Receives JSON for every intent tap: contact, edition, action, note. Use it to create deals in HubSpot, Zoho or Apollo.</small></label>
-            <div className="full row"><Submit>Save</Submit><TestButton what="alert" label="Send a test alert" /></div>
-          </form>
-        );
-      })()}
-
-      {tab === 'team' && (() => {
-        const users = all('SELECT id, email, name, role, created_at FROM users ORDER BY created_at');
-        return (
-          <div className="stack">
-            <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th></th></tr></thead>
-              <tbody>{users.map((u) => <tr key={u.id}><td>{u.name}{u.id === me.id ? ' (you)' : ''}</td><td>{u.email}</td><td>{u.role}</td><td className="hint">{fmtDate(u.created_at)}</td><td>{u.id !== me.id && me.role === 'admin' && <div className="row end">
-                <form action={A.resetUserPassword} className="row"><input type="hidden" name="id" value={u.id} /><input className="in" name="password" type="password" placeholder="New password" aria-label={`New password for ${u.name}`} style={{ width: 150 }} autoComplete="new-password" /><button className="btn sm">Reset</button></form>
-                <Confirm action={A.deleteUser.bind(null, u.id)} label="Remove" className="btn sm ghost" /></div>}</td></tr>)}</tbody></table></div>
-            {me.role === 'admin' && <form action={A.addUser} className="card form-grid"><h2 className="full">Add a teammate</h2>
-              <label className="f"><span>Name</span><input className="in" name="name" /></label><label className="f"><span>Email</span><input className="in" name="email" type="email" required /></label>
-              <label className="f"><span>Temporary password</span><input className="in" name="password" type="password" minLength={8} required autoComplete="new-password" /></label>
-              <label className="f"><span>Role</span><select className="in" name="role"><option value="editor">Editor: write, edit, send</option><option value="admin">Admin: also settings & keys</option></select></label>
-              <div className="full"><Submit>Add teammate</Submit></div></form>}
-            <form action={A.changeMyPassword} className="card form-grid"><h2 className="full">Change your password</h2>
-              <label className="f"><span>Current password</span><input className="in" name="current" type="password" required autoComplete="current-password" /></label>
-              <label className="f"><span>New password</span><input className="in" name="password" type="password" minLength={8} required autoComplete="new-password" /></label>
-              <div className="full"><Submit>Change password</Submit></div></form>
-          </div>
-        );
-      })()}
-
-      {tab === 'data' && (
-        <div className="grid2">
-          <section className="card stack"><h2>Exports</h2>
-            <div className="row"><a className="btn" href="/api/export?type=contacts">Contacts CSV</a><a className="btn" href="/api/export?type=leads">Leads CSV</a><a className="btn" href="/api/export?type=events">All events CSV</a><a className="btn" href="/api/export?type=backup">Database backup</a></div>
-            <p className="hint">Everything lives in <code>{DATA_DIR}</code>: the SQLite database, uploads and the encryption key. Back up that folder; without <code>secret.key</code> (or APP_SECRET) saved API keys can’t be decrypted.</p></section>
-          <section className="card stack"><h2>Scheduler</h2>
-            <p className="hint">The app checks jobs and the send queue every minute while it runs. If you host it somewhere that sleeps (serverless), set <code>CRON_KEY</code> and call this URL every minute from a cron service:</p>
-            <code style={{ wordBreak: 'break-all' }}>{baseUrl()}/api/cron?key=YOUR_CRON_KEY</code></section>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-async function ProductsTab({ sel }: { sel?: string }) {
+async function ProductsTab({ sel, showNew }: { sel?: string; showNew: boolean }) {
   const products = listProducts();
   const active = await activeProduct();
   const p = products.find((x) => x.id === sel) || active || products[0];
+  const host = (p?.website || 'yourdomain.com').replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '');
   return (
-    <div className="stack">
-      <div className="row">{products.map((x) => <Link key={x.id} className={`btn sm ${x.id === p?.id ? 'primary' : ''}`} href={`/app/settings?tab=products&p=${x.id}`}>{x.name}</Link>)}</div>
+    <div className="se-stack">
+      <nav className="cx-seg se-prods" aria-label="Products">
+        {products.map((x) => <Link key={x.id} href={`/app/settings?tab=products&p=${x.id}`} aria-current={x.id === p?.id ? 'page' : undefined} scroll={false}>{x.name}</Link>)}
+        <Link href={`/app/settings?tab=products${p ? `&p=${p.id}` : ''}&new=1#new-product`} className="se-prods-add" aria-label="Add a product"><Icon name="plus" size={14} strokeWidth={2.2} />New</Link>
+      </nav>
       {p && (
-        <form action={A.saveProduct} className="card form-grid">
+        <form action={A.saveProduct} className="se-form" key={p.id}>
           <input type="hidden" name="id" value={p.id} />
-          <h2 className="full">{p.name}</h2>
-          <label className="f"><span>Product name</span><input className="in" name="name" defaultValue={p.name} /></label>
-          <label className="f"><span>Website</span><input className="in" name="website" type="url" defaultValue={p.website} /></label>
-          <label className="f"><span>Newsletter name</span><input className="in" name="newsletter_name" defaultValue={p.newsletter_name} /></label>
-          <label className="f"><span>Link name</span><input className="in" name="slug" defaultValue={p.slug} /><small>{baseUrl()}/e/{p.slug}/…</small></label>
-          <label className="f full"><span>Tagline</span><input className="in" name="tagline" defaultValue={p.brand.tagline} /></label>
-          <label className="f full"><span>What {p.name} does (the AI reads this)</span><textarea className="in" name="about" rows={4} defaultValue={p.brand.about} /></label>
-          <label className="f full"><span>Who the readers are</span><textarea className="in" name="icp" rows={3} defaultValue={p.brand.icp} /></label>
-          <label className="f full"><span>Tone of voice</span><textarea className="in" name="tone" rows={2} defaultValue={p.brand.tone} /></label>
-          <label className="f full"><span>Banned words (comma separated)</span><input className="in" name="bannedWords" defaultValue={p.brand.bannedWords} /></label>
-          <div className="full row" style={{ gap: 18 }}>
-            <label className="f"><span>Primary</span><input type="color" name="primary" defaultValue={p.brand.primary} /></label>
-            <label className="f"><span>Accent</span><input type="color" name="accent" defaultValue={p.brand.accent} /></label>
-            <label className="f"><span>Soft background</span><input type="color" name="soft" defaultValue={p.brand.soft} /></label>
-            <label className="f" style={{ flex: 1 }}><span>Logo URL (wide logo on a transparent background)</span><input className="in" name="logoUrl" defaultValue={p.brand.logoUrl} placeholder="Upload in any editor image field, then paste the link" /></label>
-          </div>
-          <label className="f"><span>Sender name</span><input className="in" name="senderName" defaultValue={p.brand.senderName} /></label>
-          <label className="f"><span>Sender email</span><input className="in" name="senderEmail" type="email" defaultValue={p.brand.senderEmail} placeholder={`brief@news.${(p.website || 'yourdomain.com').replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '')}`} /></label>
-          <label className="f"><span>Reply-to email</span><input className="in" name="replyTo" type="email" defaultValue={p.brand.replyTo} /></label>
-          <label className="f"><span>Sign-off</span><input className="in" name="signOff" defaultValue={p.brand.signOff} /></label>
-          <label className="f full"><span>Registered address (email footer)</span><input className="in" name="address" defaultValue={p.brand.address} /></label>
-          <label className="f"><span>“Book 15 min” link</span><input className="in" name="bookingUrl" type="url" defaultValue={p.brand.bookingUrl} placeholder="https://calendly.com/…" /><small>Name and email are pre-filled for the reader.</small></label>
-          <label className="f"><span>Sales alert email for this product</span><input className="in" name="alertEmail" type="email" defaultValue={p.brand.alertEmail} /></label>
-          <div className="full row"><Submit>Save {p.name}</Submit></div>
+          <Group title="Identity">
+            <Row label="Product name"><input className="in" name="name" defaultValue={p.name} /></Row>
+            <Row label="Website"><input className="in" name="website" type="url" defaultValue={p.website} placeholder="https://" /></Row>
+            <Row label="Newsletter name"><input className="in" name="newsletter_name" defaultValue={p.newsletter_name} /></Row>
+            <Row label="Link name" sub={<span className="mono">{baseUrl()}/e/{p.slug}/…</span>}><input className="in mono" name="slug" defaultValue={p.slug} /></Row>
+            <Row label="Tagline"><input className="in" name="tagline" defaultValue={p.brand.tagline} placeholder="Weekly briefing for sales teams" /></Row>
+          </Group>
+          <Group title="Voice" footer="The AI reads all of this before it writes a draft.">
+            <Row stack label={`What ${p.name} does`}><textarea className="in" name="about" rows={4} defaultValue={p.brand.about} /></Row>
+            <Row stack label="Who the readers are"><textarea className="in" name="icp" rows={3} defaultValue={p.brand.icp} /></Row>
+            <Row stack label="Tone of voice"><textarea className="in" name="tone" rows={2} defaultValue={p.brand.tone} /></Row>
+            <Row stack label="Banned words" sub="Comma separated. The checks block any draft that uses them."><input className="in" name="bannedWords" defaultValue={p.brand.bannedWords} /></Row>
+          </Group>
+          <section className="cx-group">
+            <h3 className="cx-group-h">Brand colours</h3>
+            <BrandColors primary={p.brand.primary} accent={p.brand.accent} soft={p.brand.soft} newsletter={p.newsletter_name} tagline={p.brand.tagline} logo={p.brand.logoUrl} />
+          </section>
+          <Group title="Logo" footer="A wide logo on a transparent background. Upload it in any editor image field, then paste the link.">
+            <Row label="Logo URL"><input className="in" name="logoUrl" defaultValue={p.brand.logoUrl} placeholder="https://…/logo.png" /></Row>
+          </Group>
+          <Group title="Sender">
+            <Row label="Sender name"><input className="in" name="senderName" defaultValue={p.brand.senderName} /></Row>
+            <Row label="Sender email"><input className="in" name="senderEmail" type="email" defaultValue={p.brand.senderEmail} placeholder={`brief@news.${host}`} /></Row>
+            <Row label="Reply-to email"><input className="in" name="replyTo" type="email" defaultValue={p.brand.replyTo} placeholder="Optional" /></Row>
+            <Row label="Sign-off"><input className="in" name="signOff" defaultValue={p.brand.signOff} /></Row>
+            <Row stack label="Registered address" sub="Shown in every email footer. Required for sending."><input className="in" name="address" defaultValue={p.brand.address} /></Row>
+          </Group>
+          <Group title="Sales">
+            <Row label="“Book 15 min” link" sub="Name and email are pre-filled for the reader."><input className="in" name="bookingUrl" type="url" defaultValue={p.brand.bookingUrl} placeholder="https://calendly.com/…" /></Row>
+            <Row label="Sales alert email" sub="For this product only."><input className="in" name="alertEmail" type="email" defaultValue={p.brand.alertEmail} /></Row>
+          </Group>
+          <SaveBar label={`Save ${p.name}`} />
         </form>
       )}
-      <form action={A.addProduct} className="card form-grid">
-        <h2 className="full">Add another product</h2>
-        <label className="f"><span>Name</span><input className="in" name="name" required /></label>
-        <label className="f"><span>Website</span><input className="in" name="website" type="url" /></label>
-        <label className="f"><span>Newsletter name</span><input className="in" name="newsletter_name" /></label>
-        <div className="full"><Submit>Add product</Submit></div>
-      </form>
+
+      <details className="se-more" id="new-product" open={showNew || !p}>
+        <summary><Icon name="plus" size={15} strokeWidth={2.2} />Add another product<Icon name="chevron" size={14} className="se-more-chev" strokeWidth={2.2} /></summary>
+        <form action={A.addProduct} className="se-form se-more-body">
+          <Group footer="It gets its own brand, knowledge, contacts, editions and automations.">
+            <Row label="Name"><input className="in" name="name" required placeholder="e.g. HeyVeya" /></Row>
+            <Row label="Website"><input className="in" name="website" type="url" placeholder="https://" /></Row>
+            <Row label="Newsletter name"><input className="in" name="newsletter_name" placeholder="e.g. The Walkthrough" /></Row>
+          </Group>
+          <div className="se-actions"><Submit>Add product</Submit></div>
+        </form>
+      </details>
+
       {p && products.length > 1 && (
-        <form action={A.deleteProduct} className="card row"><input type="hidden" name="id" value={p.id} /><span>Delete {p.name} and all its editions, contacts and results. Type DELETE:</span><input className="in" name="confirm" style={{ width: 120 }} /><button className="btn danger">Delete product</button></form>
+        <form action={A.deleteProduct} className="se-form">
+          <input type="hidden" name="id" value={p.id} />
+          <Group title="Danger zone" className="se-danger">
+            <Row as="div" label={`Delete ${p.name}`} sub="Removes all its editions, contacts and results. This can’t be undone. Type DELETE to confirm.">
+              <span className="se-pair"><input className="in mono" name="confirm" aria-label="Type DELETE to confirm" placeholder="DELETE" autoComplete="off" /><button className="btn danger">Delete product</button></span>
+            </Row>
+          </Group>
+        </form>
       )}
     </div>
   );
@@ -196,42 +329,61 @@ async function ProductsTab({ sel }: { sel?: string }) {
 function AiTab() {
   const ai = getSetting('ai');
   const used = tokensThisMonth();
+  const limit = Number(ai.monthlyTokenLimit) || 0;
+  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const usage = all("SELECT provider, model, task, COUNT(*) AS calls, SUM(input_tokens) AS i, SUM(output_tokens) AS o, SUM(ok = 0) AS errs FROM llm_usage WHERE created_at >= date('now','start of month') GROUP BY provider, model, task ORDER BY i + o DESC");
   return (
-    <div className="stack">
-      <form action={A.saveAI} className="card stack">
-        <h2>API keys</h2>
-        <p className="hint">Add one or more. Keys are encrypted on the server and never shown again. With two providers, the fact check automatically uses the other company’s model, because different models tend to make different mistakes.</p>
-        {PROVIDERS.map((pv) => {
-          const k = providerKey(pv);
-          return (
-            <div key={pv} className="row" style={{ alignItems: 'flex-end' }}>
-              <label className="f" style={{ flex: 1, minWidth: 240 }}><span>{PROVIDER_LABEL[pv]} {k ? <span className="pill ok">saved · {mask(k)}</span> : <span className="pill">not set</span>}</span><input className="in" name={`key_${pv}`} type="password" autoComplete="off" placeholder={k ? 'Paste a new key to replace' : { anthropic: 'sk-ant-…', openai: 'sk-…', gemini: 'AIza…', openrouter: 'sk-or-…' }[pv]} /></label>
-              {k && <label className="check"><input type="checkbox" name={`clear_${pv}`} /><span>Remove</span></label>}
-              {k && <TestButton what="ai" provider={pv} label="Test" />}
-            </div>
-          );
-        })}
-        <hr />
-        <h2>Which model does what</h2>
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Task</th><th>Provider</th><th>Model</th><th>Now using</th></tr></thead><tbody>
+    <div className="se-stack">
+      <form action={A.saveAI} className="se-form">
+        <Group title="API keys" footer="Keys are encrypted on the server and never shown again. With two providers, the fact check uses the other company’s model, because different models tend to make different mistakes.">
+          {PROVIDERS.map((pv) => {
+            const k = providerKey(pv);
+            return (
+              <div key={pv} className="cx-row se-prov" role="group" aria-label={PROVIDER_LABEL[pv]}>
+                <span className="cx-row-l se-prov-l">
+                  <span className={`se-logo l-${pv}`} aria-hidden>{PROVIDER_MARK[pv]}</span>
+                  <span><span className="cx-row-t">{PROVIDER_LABEL[pv]}</span><small className={`cx-row-s se-conn ${k ? 'on' : ''}`}><span className="dot" />{k ? 'Connected' : 'Not connected'}</small></span>
+                </span>
+                <span className="cx-row-c se-prov-c">
+                  <SecretField name={`key_${pv}`} clearName={`clear_${pv}`} saved={!!k} masked={mask(k)} placeholder={k ? 'Paste a new key' : KEY_HINT[pv]} label={`${PROVIDER_LABEL[pv]} API key`} />
+                  {k && <TestButton what="ai" provider={pv} label="Test" />}
+                </span>
+              </div>
+            );
+          })}
+        </Group>
+        <Group title="Which model does what" footer="Leave a model empty to use that provider’s default.">
           {TASKS.map(([t, l, h]) => {
             const r = ai.routing[t];
             const now = routeFor(t)[0];
-            return <tr key={t}><td><b>{l}</b><div className="hint">{h}</div></td>
-              <td><select className="in" aria-label={`Provider for ${l}`} name={`route_${t}`} defaultValue={r.provider}><option value="auto">Auto</option>{PROVIDERS.map((pv) => <option key={pv} value={pv}>{PROVIDER_LABEL[pv]}</option>)}</select></td>
-              <td><input className="in mono" aria-label={`Model for ${l}`} name={`model_${t}`} defaultValue={r.model} placeholder="default" list={`models-${t}`} /><datalist id={`models-${t}`}>{PROVIDERS.flatMap((pv) => MODEL_DEFAULTS[pv].suggestions).map((m) => <option key={m} value={m} />)}</datalist></td>
-              <td className="hint">{now ? `${PROVIDER_LABEL[now.provider]} · ${now.model}` : 'Demo mode'}</td></tr>;
+            return (
+              <div key={t} className="cx-row se-route" role="group" aria-label={l}>
+                <span className="cx-row-l"><span className="cx-row-t">{l}</span><small className="cx-row-s">{h}</small><small className="se-now"><span className={`dot ${now ? 'on' : ''}`} />{now ? `${PROVIDER_LABEL[now.provider]} · ${now.model}` : 'Demo mode'}</small></span>
+                <span className="cx-row-c se-pair">
+                  <select className="in" aria-label={`Provider for ${l}`} name={`route_${t}`} defaultValue={r.provider}><option value="auto">Auto</option>{PROVIDERS.map((pv) => <option key={pv} value={pv}>{PROVIDER_LABEL[pv]}</option>)}</select>
+                  <input className="in mono" aria-label={`Model for ${l}`} name={`model_${t}`} defaultValue={r.model} placeholder="Default model" list={`models-${t}`} />
+                  <datalist id={`models-${t}`}>{PROVIDERS.flatMap((pv) => MODEL_DEFAULTS[pv].suggestions).map((m) => <option key={m} value={m} />)}</datalist>
+                </span>
+              </div>
+            );
           })}
-        </tbody></table></div>
-        <label className="f" style={{ maxWidth: 320 }}><span>Monthly token limit (0 = no limit)</span><input className="in" name="monthlyTokenLimit" type="number" min={0} defaultValue={ai.monthlyTokenLimit} /><small>Used this month: {num(used)} tokens. A typical edition uses 30–80k.</small></label>
-        <div><Submit>Save AI settings</Submit></div>
+        </Group>
+        <Group title="Budget" footer="A typical edition uses 30–80k tokens.">
+          <Row label="Monthly token limit" sub="0 means no limit."><input className="in se-num" name="monthlyTokenLimit" type="number" min={0} defaultValue={ai.monthlyTokenLimit} /></Row>
+          <div className="cx-row se-meter-row">
+            <span className="cx-row-l"><span className="cx-row-t">Used this month</span><small className="cx-row-s">{num(used)} tokens{limit ? ` of ${num(limit)}` : ''}</small></span>
+            <span className="cx-row-c">{limit ? <span className={`se-meter ${pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : ''}`} role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Share of monthly token limit used"><i style={{ width: `${Math.max(pct, 1)}%` }} /></span> : <span className="hint">No limit set</span>}</span>
+          </div>
+        </Group>
+        <SaveBar label="Save AI settings" />
       </form>
-      <section className="card"><h2>This month’s usage</h2>
-        {usage.length ? <div className="tbl-wrap" style={{ marginTop: 10 }}><table className="tbl"><thead><tr><th>Provider</th><th>Model</th><th>Task</th><th className="num">Calls</th><th className="num">Input</th><th className="num">Output</th><th className="num">Errors</th></tr></thead>
-          <tbody>{usage.map((u, i) => <tr key={i}><td>{u.provider}</td><td className="mono">{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div> : <p className="hint">No AI calls yet this month.</p>}
+      <section className="cx-group">
+        <h3 className="cx-group-h">This month’s usage</h3>
+        {usage.length ? (
+          <div className="cx-group-box se-usage"><table className="tbl"><thead><tr><th>Provider</th><th>Model</th><th>Task</th><th className="num">Calls</th><th className="num">Input</th><th className="num">Output</th><th className="num">Errors</th></tr></thead>
+            <tbody>{usage.map((u, i) => <tr key={i}><td>{PROVIDER_LABEL[u.provider as keyof typeof PROVIDER_LABEL] || u.provider}</td><td className="mono">{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div>
+        ) : <div className="cx-group-box"><div className="cx-row"><span className="cx-row-l"><span className="cx-row-s">No AI calls yet this month. Drafts run in demo mode until a key is connected.</span></span></div></div>}
       </section>
     </div>
   );
 }
-

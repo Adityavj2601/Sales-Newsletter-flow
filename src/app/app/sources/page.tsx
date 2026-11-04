@@ -1,8 +1,10 @@
 import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
-import { ago } from '@/lib/format';
+import { ago, fmtDate } from '@/lib/format';
 import { gnewsUrl } from '@/lib/ingest';
-import { Submit, Confirm } from '@/components/ui';
+import { Confirm } from '@/components/ui';
+import { Icon, Tile } from '@/components/content/icons';
+import { SourceForm, SourceSwitch } from '@/components/content/sources';
 import { addSource, toggleSource, deleteSource } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -11,31 +13,62 @@ export const metadata = { title: 'News sources' };
 export default async function Sources() {
   const p = await requireProduct();
   const rows = all('SELECT * FROM sources WHERE product_id IS NULL OR product_id = ? ORDER BY active DESC, kind, name', p.id);
+  const active = rows.filter((r) => r.active).length;
+  const failing = rows.filter((r) => r.active && r.last_error).length;
+  const groups = [
+    { kind: 'gnews', title: 'Google News searches', icon: 'search', tone: 'blue' },
+    { kind: 'rss', title: 'RSS feeds', icon: 'rss', tone: 'orange' },
+  ];
   return (
-    <div className="stack" style={{ gap: 18 }}>
-      <div className="ph"><div><div className="eyebrow">Where stories come from</div><h1>News sources</h1><p className="sub">Google News searches (India edition, last 7 days) and RSS feeds. The “Fetch news” automation reads them every morning. Shared sources feed every product.</p></div></div>
-      <form action={addSource} className="card">
-        <h2>Add a source</h2>
-        <div className="form-grid" style={{ marginTop: 10 }}>
-          <label className="f"><span>Type</span><select className="in" name="kind"><option value="gnews">Google News search</option><option value="rss">RSS / Atom feed URL</option></select></label>
-          <label className="f"><span>Use for</span><select className="in" name="scope"><option value="product">Only {p.name}</option><option value="all">All products</option></select></label>
-          <label className="f full"><span>Search words or feed URL</span><input className="in" name="url" required placeholder={'e.g.  "channel partner" real estate India   or   https://example.com/feed'} /></label>
-          <label className="f full"><span>Name (optional)</span><input className="in" name="name" placeholder="e.g. Google News: channel partners" /></label>
+    <div className="stack so" style={{ gap: 22 }}>
+      <div className="ph">
+        <div><div className="eyebrow">Where stories come from</div><h1>News sources</h1><p className="sub">Google News searches (India edition, last 7 days) and RSS feeds. The “Fetch news” automation reads every active source each morning. Sources are shared by every product unless marked otherwise.</p></div>
+        <div className="so-sum" aria-label="Source summary">
+          <span><b>{active}</b> active</span>
+          <span><b>{rows.length - active}</b> paused</span>
+          <span className={failing ? 'bad' : ''}><b>{failing}</b> failing</span>
         </div>
-        <div className="row" style={{ marginTop: 12 }}><Submit>Add source</Submit><span className="hint">Search tips: use quotes for phrases, OR between alternatives, and a minus sign to exclude words.</span></div>
-      </form>
-      <div className="tbl-wrap"><table className="tbl">
-        <thead><tr><th>Source</th><th>Scope</th><th>Last read</th><th>Result</th><th></th></tr></thead>
-        <tbody>{rows.map((r) => (
-          <tr key={r.id} style={{ opacity: r.active ? 1 : 0.55 }}>
-            <td style={{ minWidth: 260 }}><b>{r.name}</b><div className="hint clip">{r.kind === 'gnews' ? <a href={gnewsUrl(r.url)} target="_blank" rel="noreferrer">{r.url}</a> : <a href={r.url} target="_blank" rel="noreferrer">{r.url}</a>}</div></td>
-            <td>{r.product_id ? p.name : 'All products'}</td>
-            <td className="hint">{ago(r.last_fetched_at)}</td>
-            <td>{r.last_error ? <span className="pill bad" title={r.last_error}>Failed: {String(r.last_error).slice(0, 40)}</span> : r.last_fetched_at ? <span className="pill ok">{r.last_count ?? 0} new</span> : <span className="hint">not read yet</span>}</td>
-            <td><div className="row end"><form action={toggleSource.bind(null, r.id)}><button className="btn sm">{r.active ? 'Pause' : 'Resume'}</button></form><Confirm action={deleteSource.bind(null, r.id)} label="Delete" confirmLabel={r.product_id ? 'Yes, delete' : 'Delete for all products'} className="btn sm ghost" /></div></td>
-          </tr>
-        ))}</tbody>
-      </table></div>
+      </div>
+
+      <SourceForm action={addSource} productName={p.name} />
+
+      {groups.map((g) => {
+        const list = rows.filter((r) => r.kind === g.kind);
+        if (!list.length) return null;
+        return (
+          <section key={g.kind} className="cx-group so-group">
+            <h3 className="cx-group-h"><Tile icon={g.icon} tone={g.tone} size="sm" />{g.title}<span className="cx-group-n">{list.length}</span></h3>
+            <ul className="cx-group-box so-list">
+              {list.map((r) => {
+                const state = !r.active ? 'off' : r.last_error ? 'bad' : r.last_fetched_at ? 'ok' : 'idle';
+                const stateLabel = { off: 'Paused', bad: 'Last read failed', ok: 'Working', idle: 'Not read yet' }[state];
+                const href = r.kind === 'gnews' ? gnewsUrl(r.url) : r.url;
+                return (
+                  <li key={r.id} className={`so-row ${state}`}>
+                    <span className={`so-dot ${state}`} role="img" aria-label={stateLabel} title={stateLabel} />
+                    <div className="so-main">
+                      <div className="so-name"><b>{r.kind === 'gnews' ? String(r.name).replace(/^Google News:\s*/i, '') : r.name}</b>{r.product_id && <span className="pill info">Only {p.name}</span>}</div>
+                      <a className="so-url" href={href} target="_blank" rel="noreferrer" title={r.url}>{r.url}</a>
+                      <div className="so-stat">
+                        {r.last_error
+                          ? <span className="so-err" title={r.last_error}><Icon name="warn" size={13} />Failed {ago(r.last_fetched_at)}: {String(r.last_error).slice(0, 80)}</span>
+                          : r.last_fetched_at
+                            ? <span title={fmtDate(r.last_fetched_at, undefined, true)}>Read {ago(r.last_fetched_at)} · {r.last_count ?? 0} new</span>
+                            : <span>Not read yet</span>}
+                      </div>
+                    </div>
+                    <div className="so-ctl">
+                      <SourceSwitch action={toggleSource.bind(null, r.id)} active={!!r.active} name={r.name} />
+                      <Confirm action={deleteSource.bind(null, r.id)} label="Delete" confirmLabel={r.product_id ? 'Delete' : 'Delete for all'} className="btn sm ghost cx-danger-text" />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+      {!rows.length && <div className="empty cx-empty"><span className="cx-empty-i"><Icon name="rss" size={26} /></span><b>No sources yet</b><span>Add a Google News search or an RSS feed above. Stories start arriving on the next fetch.</span></div>}
     </div>
   );
 }

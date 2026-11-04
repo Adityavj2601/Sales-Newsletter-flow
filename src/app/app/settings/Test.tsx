@@ -1,24 +1,42 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Spinner } from '@/components/ui';
+import { Icon } from '@/components/content/icons';
 
+/** Inline connection test: idle → spinner → passed / failed, with the server’s explanation underneath. */
 export function TestButton({ what, provider, label, needsInput }: { what: string; provider?: string; label: string; needsInput?: string }) {
-  const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<'idle' | 'busy' | 'ok' | 'fail'>('idle');
+  const [msg, setMsg] = useState('');
   const [input, setInput] = useState('');
+  const [flash, setFlash] = useState(false);
+  useEffect(() => {
+    if (state !== 'ok' && state !== 'fail') return;
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 2600);
+    return () => clearTimeout(t);
+  }, [state, msg]);
   async function run() {
-    setBusy(true); setMsg(null);
+    setState('busy'); setMsg('');
     try {
       const r = await fetch('/api/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ what, provider, to: input }) });
-      const j = await r.json();
-      setMsg({ ok: r.ok, t: r.ok ? j.message : j.error });
-    } catch (e: any) { setMsg({ ok: false, t: e.message }); }
-    setBusy(false);
+      const j = await r.json().catch(() => ({}));
+      setMsg((r.ok ? j.message : j.error) || (r.ok ? 'It works.' : 'The test failed.'));
+      setState(r.ok ? 'ok' : 'fail');
+    } catch (e: any) { setMsg(e?.message || 'Couldn’t reach the server.'); setState('fail'); }
   }
+  const busy = state === 'busy';
   return (
-    <span className="row" style={{ display: 'inline-flex' }}>
-      {needsInput && <input className="in" style={{ width: 200 }} placeholder={needsInput} value={input} onChange={(e) => setInput(e.target.value)} />}
-      <button type="button" className="btn sm" onClick={run} disabled={busy || (!!needsInput && !input)}>{busy ? 'Testing…' : label}</button>
-      {msg && <span className={`pill ${msg.ok ? 'ok' : 'bad'}`} style={{ whiteSpace: 'normal' }}>{msg.t}</span>}
+    <span className={`cx-test ${state}`} data-nodirty>
+      <span className="cx-test-row">
+        {needsInput && <input className="in" type="tel" inputMode="tel" placeholder={needsInput} aria-label={needsInput} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (input && !busy) run(); } }} />}
+        <button type="button" className={`btn sm cx-test-b ${flash ? state : ''}`} onClick={run} disabled={busy || (!!needsInput && !input)} aria-busy={busy}>
+          {busy ? <><Spinner size={13} />Testing…</>
+            : flash && state === 'ok' ? <><Icon name="check" size={14} strokeWidth={2.4} />Passed</>
+              : flash && state === 'fail' ? <><Icon name="x" size={13} strokeWidth={2.4} />Failed</>
+                : <><Icon name="bolt" size={14} />{state === 'fail' ? 'Try again' : label}</>}
+        </button>
+      </span>
+      {msg && <span className={`cx-test-msg ${state === 'ok' ? 'ok' : 'bad'}`} role="status"><Icon name={state === 'ok' ? 'check' : 'warn'} size={13} strokeWidth={2.2} /><span>{msg}</span></span>}
     </span>
   );
 }
