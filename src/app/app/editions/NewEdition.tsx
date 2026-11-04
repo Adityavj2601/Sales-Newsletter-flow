@@ -110,7 +110,7 @@ export function NewEdition({ open, stories, preStories, kb, preKb, planned, aiRe
             <div className="ne-h">
               <div>
                 <div className="eyebrow">{stories.length ? `Step ${step} of 2` : 'New edition'}</div>
-                <h2>{!stories.length ? 'Start with this week’s news' : step === 1 ? 'Pick this week’s stories' : 'Add Our work and a brief'}</h2>
+                <h2>{!stories.length ? 'No stories to draft from yet' : step === 1 ? 'Pick this week’s stories' : 'Add Our work and a brief'}</h2>
               </div>
               <button type="button" className="icon-btn ne-x" onClick={close} aria-label="Close"><I.close size={14} /></button>
               {stories.length > 0 && <div className="ne-steps" aria-hidden><span className="on" /><span className={step === 2 ? 'on' : ''} /></div>}
@@ -154,18 +154,12 @@ export function NewEdition({ open, stories, preStories, kb, preKb, planned, aiRe
                     </>
                   ) : (
                     <div className="ne-empty">
-                      <span className="icon-chip ne-empty-ic" aria-hidden><I.news size={22} /></span>
-                      <b>No stories to draft from yet</b>
-                      <span className="hint">The AI writes from this week’s news. Fetch the latest from your sources, or paste a link to an article, in the Story pool. Then come back here.</span>
+                      <p className="hint">The AI writes from this week’s news. Fetch the latest from your sources, or paste a link to an article, in the Story pool. Then come back here.</p>
                       <ol className="ne-empty-steps">
                         <li><span className="tnum">1</span>Fetch news or add a story by URL</li>
                         <li><span className="tnum">2</span>Shortlist the ones worth writing about</li>
                         <li><span className="tnum">3</span>Draft this edition from them</li>
                       </ol>
-                      <div className="ne-empty-a">
-                        <Link className="btn primary" href="/app/stories" onClick={() => setShow(false)}>Open Story pool<I.chevron size={13} /></Link>
-                        <button type="button" className="btn" onClick={() => create('blank')}>Start blank</button>
-                      </div>
                     </div>
                   )
                 ) : (
@@ -200,8 +194,14 @@ export function NewEdition({ open, stories, preStories, kb, preKb, planned, aiRe
                 )}
               </div>
             </div>
-            {(step === 2 || stories.length > 0) && <div className="ne-f">
-              {step === 1 ? (
+            <div className="ne-f">
+              {!stories.length ? (
+                <>
+                  <button type="button" className="btn" onClick={() => create('blank')}>Start blank</button>
+                  <span className="spacer" />
+                  <Link className="btn primary" href="/app/stories" onClick={() => setShow(false)}>Open Story pool<I.chevron size={13} /></Link>
+                </>
+              ) : step === 1 ? (
                 <>
                   <button type="button" className="btn" onClick={() => create('blank')}>Start blank</button>
                   <span className="spacer" />
@@ -216,7 +216,7 @@ export function NewEdition({ open, stories, preStories, kb, preKb, planned, aiRe
                   <button type="button" className="btn primary" disabled={!sel.length} onClick={() => create('ai')}><I.sparkle size={14} />{aiReady ? 'Write draft with AI' : 'Build demo draft'}</button>
                 </>
               )}
-            </div>}
+            </div>
           </>
         )}
       </Modal>

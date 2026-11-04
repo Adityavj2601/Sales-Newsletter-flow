@@ -135,8 +135,29 @@ export function Modal({ open, onClose, label, children, className = '', dismissa
   );
 }
 
-/* ---------- Preview iframe that cross-fades instead of flashing white ---------- */
-export function PreviewFrame({ html, title, style }: { html: string; title: string; style?: React.CSSProperties }) {
+/* ---------- Preview iframe that cross-fades instead of flashing white ----------
+   With `fit`, the page reports its own height (the frame is sandboxed, so it posts a message) and the frame grows
+   to it: on phones the preview then scrolls with the page instead of inside a box of its own. */
+const FIT_SCRIPT = '<script>(function(){var b=document.body;if(!b||!window.ResizeObserver)return;var p=function(){var h=Math.ceil(b.getBoundingClientRect().bottom+(parseFloat(getComputedStyle(b).marginBottom)||0));parent.postMessage({pfH:h},"*")};new ResizeObserver(p).observe(b);addEventListener("load",p);p();})()</script>';
+const withFit = (html: string) => (!html ? html : html.includes('</body>') ? html.replace('</body>', `${FIT_SCRIPT}</body>`) : html + FIT_SCRIPT);
+export function PreviewFrame({ html, title, style, fit = false, onHeight }: { html: string; title: string; style?: React.CSSProperties; fit?: boolean; onHeight?: (h: number) => void }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [fh, setFh] = useState(0);
+  const onH = useRef(onHeight);
+  onH.current = onHeight;
+  useEffect(() => {
+    if (!fit) return;
+    const on = (e: MessageEvent) => {
+      const fr = wrap.current?.querySelectorAll('iframe');
+      // A frame inside a hidden pane measures 0: keep the last real height until it is shown again.
+      if (!fr?.length || fr[fr.length - 1].contentWindow !== e.source || !(Number(e.data?.pfH) > 40)) return;
+      const h = Number(e.data.pfH);
+      setFh(h);
+      onH.current?.(h);
+    };
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
+  }, [fit]);
   const [frames, setFrames] = useState<{ k: number; html: string; ready: boolean }[]>(() => [{ k: 0, html, ready: false }]);
   useEffect(() => {
     setFrames((f) => {
@@ -151,9 +172,9 @@ export function PreviewFrame({ html, title, style }: { html: string; title: stri
     setTimeout(() => setFrames((f) => { const i = f.findIndex((x) => x.k === k); return i > 0 ? f.slice(i) : f; }), 320);
   };
   return (
-    <div className="pf" style={style}>
+    <div ref={wrap} className={`pf ${fit ? 'fit' : ''} ${fit && fh ? 'sized' : ''}`} style={fit && fh && !onHeight ? { ...style, height: fh } : style}>
       {frames.map((f) => (
-        <iframe key={f.k} title={title} srcDoc={f.html} sandbox="allow-scripts allow-popups" className={f.ready ? 'on' : ''} onLoad={() => loaded(f.k)} />
+        <iframe key={f.k} title={title} srcDoc={fit ? withFit(f.html) : f.html} sandbox="allow-scripts allow-popups" className={f.ready ? 'on' : ''} onLoad={() => loaded(f.k)} />
       ))}
       {!frames.some((f) => f.ready && f.html) && <div className="pf-skel" aria-hidden><span className="skeleton" /><span className="skeleton" /><span className="skeleton" /><span className="skeleton" /></div>}
     </div>
@@ -161,7 +182,8 @@ export function PreviewFrame({ html, title, style }: { html: string; title: stri
 }
 
 /* ---------- Preview rendered at a real viewport width, scaled down to fit its pane ---------- */
-export function ScaledPreview({ html, title, width }: { html: string; title: string; width: number }) {
+export function ScaledPreview({ html, title, width, fit = false }: { html: string; title: string; width: number; fit?: boolean }) {
+  const [fh, setFh] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   useLayoutEffect(() => {
@@ -175,8 +197,8 @@ export function ScaledPreview({ html, title, width }: { html: string; title: str
   }, []);
   const s = box ? Math.min(1, box.w / width) : 1;
   return (
-    <div ref={ref} className="scaled">
-      {box && box.w > 0 && <PreviewFrame html={html} title={title} style={{ width: s < 1 ? width : box.w, height: box.h / s, transform: s < 1 ? `scale(${s})` : undefined }} />}
+    <div ref={ref} className="scaled" style={fit && fh ? { flex: 'none', height: Math.ceil(fh * s) } : undefined}>
+      {box && box.w > 0 && <PreviewFrame html={html} title={title} fit={fit} onHeight={setFh} style={{ width: s < 1 ? width : box.w, height: fit && fh ? fh : box.h / s, transform: s < 1 ? `scale(${s})` : undefined }} />}
       {box && s < 1 && <span className="scale-badge">{Math.round(s * 100)}%</span>}
     </div>
   );
