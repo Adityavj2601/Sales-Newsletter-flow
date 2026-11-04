@@ -6,3 +6,6 @@ data
 next-env.d.ts
 .env
 .env.local
+
+# Agent worktrees and local tool state
+.claude/
