@@ -472,6 +472,9 @@
 .no-insp .ed-right { overflow: hidden; opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(16px); transition: opacity var(--t2) var(--ease), transform var(--t3) var(--ease-out), visibility 0s linear var(--t3); }
 .insp-scrim { display: none !important; }
 .insp-close { display: none !important; }
+/* The sticky panes end 18px above the viewport (their height above). The page's bottom padding must be no larger:
+   otherwise, near the end of the page, the grid's bottom edge pushes them up under the toolbar, switcher first. */
+@media (min-width: 1000px) { .shell:has(.ed-route) .main { padding-bottom: 18px; } }
 
 @media (min-width: 1000px) and (max-width: 1499px) {
   .ed-shell.ed-v2, .ed-shell.ed-v2.no-insp { grid-template-columns: 400px minmax(0, 1fr); }
@@ -543,6 +546,9 @@
     border: 0; border-radius: 0; background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px);
     box-shadow: 0 -0.5px 0 var(--line);
   }
+  /* Copilot: the composer ends on the dock, nothing below it but the dock and the safe area. */
+  .shell:has(.ed-shell[data-pane="insp"]) .main { padding-bottom: 0; }
+  .ed:has(> .ed-shell[data-pane="insp"]) { padding-bottom: calc(52px + env(safe-area-inset-bottom)); }
   .ed-v2 .composer .cp-chips { margin-inline: calc(-1 * clamp(16px, 3.4vw, 44px)); padding-inline: clamp(16px, 3.4vw, 44px); }
   .ed-v2 .cp-hint { display: none; }
   .ed-v2 .insp-tabs, .pv-head .seg { -webkit-mask-image: none; mask-image: none; overflow: visible; }
@@ -610,28 +616,35 @@
 .ed-blocks .blk.flag { box-shadow: inset 0 0 0 1.5px var(--bad), var(--shadow-1); }
 .ed-blocks .blk.fresh { animation: fresh calc(var(--t3) * 4) var(--ease-out) both; }
 .ed-blocks .blk.dragging { opacity: 0.4; transform: scale(0.985); }
-.ed-blocks .blk > header { position: relative; gap: 10px; padding: 10px 10px 10px 12px; min-height: 54px; border-radius: var(--r); transition: background var(--t1) var(--ease); -webkit-tap-highlight-color: transparent; }
+.ed-blocks .blk > header { position: relative; gap: 10px; padding: 10px 10px 10px 20px; min-height: 54px; border-radius: var(--r); transition: background var(--t1) var(--ease); -webkit-tap-highlight-color: transparent; }
 .ed-blocks .blk > header:active { background: var(--fill); }
 .ed-blocks .blk.open > header { border-radius: var(--r) var(--r) 0 0; }
 .ed-blocks .blk > header:focus-visible { outline-offset: -3px; border-radius: var(--r); }
-.ed-blocks .hd { display: grid; gap: 1px; min-width: 0; flex: 1; transition: -webkit-mask-size var(--t2) var(--ease), mask-size var(--t2) var(--ease); }
+.ed-blocks .hd { display: grid; gap: 1px; min-width: 0; flex: 1; }
 .ed-blocks .blk header .typ { all: unset; font: 500 11.5px/1.3 var(--f-ui); color: var(--faint); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Titles wrap to two lines instead of truncating at one. */
 .ed-blocks .blk header .s { font: 500 14px/1.3 var(--f-ui); color: var(--ink); letter-spacing: -0.01em; flex: none; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: ellipsis; overflow-wrap: anywhere; }
 .ed-blocks .chev { display: inline-grid; color: var(--faint); flex: none; transition: transform var(--t3) var(--spring), color var(--t1) var(--ease); }
 .ed-blocks header[aria-expanded="true"] .chev { transform: rotate(90deg); color: var(--muted); }
-.ed-blocks .grip { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: inline-grid; place-items: center; width: 13px; height: 28px; color: var(--faint); cursor: grab; opacity: 0; flex: none; border-radius: 4px; transition: opacity var(--t1) var(--ease); touch-action: none; }
+/* The drag grip sits in the header's 20px left lane, inside the card, never over its edge (touch has no grip). */
+.ed-blocks .grip { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); display: inline-grid; place-items: center; width: 13px; height: 28px; color: var(--faint); cursor: grab; opacity: 0; flex: none; border-radius: 4px; transition: opacity var(--t1) var(--ease); touch-action: none; }
 .ed-blocks .blk:hover .grip { opacity: 0.8; }
 .ed-blocks .grip:active { cursor: grabbing; }
 .flag-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); flex: none; box-shadow: 0 0 0 3px var(--bad-bg); }
-/* Hover tools fade in over the end of the title. They carry the card's colour on a soft leading gradient,
-   so the title's end dissolves beneath them while its start stays fully readable. */
+/* Hover tools fade in at the end of the row. The title makes room for them (one line, ellipsis, padding the
+   tools' width) instead of running beneath them. The editor holds the row's height first and marks it data-hold,
+   so a two-line title turning into one never shifts the list under the pointer. */
+.ed-blocks .blk { --tools-w: 96px; }
 .ed-blocks .blk .tools {
-  position: absolute; right: 30px; top: 50%; display: flex; gap: 0; padding-left: 30px; opacity: 0; pointer-events: none;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 26px);
+  position: absolute; right: 30px; top: 50%; display: flex; gap: 0; opacity: 0; pointer-events: none;
   transform: translateY(-50%); transition: opacity var(--t2) var(--ease);
 }
 .ed-blocks .blk > header:is(:hover, :focus-within) .tools { opacity: 1; pointer-events: auto; }
+@media (hover: hover) {
+  .ed-blocks .blk:not(.open) > header[data-hold]:has(> .tools):is(:hover, :focus-within) .hd { padding-right: calc(var(--tools-w) + 6px); }
+  .ed-blocks .blk:not(.open) > header[data-hold]:has(> .tools):has(> .flag-dot):is(:hover, :focus-within) .hd { padding-right: calc(var(--tools-w) - 12px); }
+  .ed-blocks .blk:not(.open) > header[data-hold]:has(> .tools):is(:hover, :focus-within) .s { display: block; white-space: nowrap; text-overflow: ellipsis; }
+}
 .ed-blocks .blk .tools button { width: 24px; height: 26px; display: grid; place-items: center; border-radius: var(--r-sm); color: var(--muted); }
 .ed-blocks .blk .tools button:hover { background: var(--fill); color: var(--ink); }
 .ed-blocks .blk .tools button.del:hover { background: var(--bad-bg); color: var(--bad); }
@@ -639,13 +652,14 @@
 /* Open block: the form below holds the full text, so the header keeps to one line and its tools sit beside it,
    always visible, instead of fading in over the title. */
 .ed-blocks .blk.open > header .s { display: block; white-space: nowrap; text-overflow: ellipsis; }
-.ed-blocks .blk.open > header .tools { position: static; transform: none; padding: 0; background: none; opacity: 1; pointer-events: auto; animation: fade-in var(--t2) var(--ease) both; }
+.ed-blocks .blk.open > header .tools { position: static; transform: none; opacity: 1; pointer-events: auto; animation: fade-in var(--t2) var(--ease) both; }
 /* Touch: no hover, so the tools live in the open block's header only (tap a block to reorder or delete it). */
 @media (hover: none) {
-  .ed-blocks .blk .tools { position: static; display: none; padding: 0; background: none; transform: none; opacity: 1; pointer-events: auto; }
+  .ed-blocks .blk .tools { position: static; display: none; transform: none; opacity: 1; pointer-events: auto; }
   .ed-blocks .blk.open > header .tools { display: flex; }
   .ed-blocks .blk .tools button { width: 34px; height: 34px; }
   .ed-blocks .grip { display: none; }
+  .ed-blocks .blk > header { padding-left: 12px; }
 }
 
 /* Fields grow with their text; no resize grips. */

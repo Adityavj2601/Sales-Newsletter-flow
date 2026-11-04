@@ -207,7 +207,20 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     setOpenRaw(id);
   }, []);
   const toggle = (id: string) => setOpen(open === id ? null : id);
-  const onHeadKey = (id: string) => (e: React.KeyboardEvent) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggle(id); } };
+  /* Hovering (or focusing) a collapsed row shortens its title to one line to make room for the tools. Hold the
+     row's resting height first (data-hold gates that CSS), so the list never shifts under the pointer. */
+  const holdRow = (e: React.SyntheticEvent<HTMLElement>) => {
+    const h = e.currentTarget;
+    if (h.dataset.hold || h.getAttribute('aria-expanded') === 'true' || !window.matchMedia('(hover: hover)').matches) return;
+    h.style.minHeight = `${h.getBoundingClientRect().height}px`;
+    h.dataset.hold = '1';
+  };
+  const dropRow = (h: HTMLElement) => { h.style.minHeight = ''; delete h.dataset.hold; };
+  const releaseRow = (e: React.SyntheticEvent<HTMLElement>) => {
+    const h = e.currentTarget;
+    requestAnimationFrame(() => { if (!h.matches(':hover') && !h.contains(document.activeElement)) dropRow(h); });
+  };
+  const onHeadKey = (id: string) => (e: React.KeyboardEvent<HTMLElement>) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); dropRow(e.currentTarget); toggle(id); } };
   const renderBody = (id: string, shown: boolean, children: React.ReactNode) => {
     const leaving = !shown && closing === id;
     if (!shown && !leaving) return null;
@@ -467,7 +480,11 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   }
   useEffect(() => {
     const el = inspBody.current;
-    if (el && tab === 'ai') el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    if (!el || tab !== 'ai') return;
+    // An empty conversation starts at the top so the demo banner is fully visible;
+    // only follow the tail once there is something to follow.
+    if (!chat.length && !thinking && !proposal) { el.scrollTop = 0; return; }
+    el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' });
   }, [chat.length, thinking, proposal, tab]);
   const autosize = (el: HTMLTextAreaElement | null) => { if (!el || el.offsetParent === null) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 168)}px`; };
   useEffect(() => { autosize(inputRef.current); }, [instr, pane, tab, layout, drawer, inspHidden]);
@@ -748,7 +765,8 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                 onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', b.id); setDragId(b.id); }}
                 onDragEnd={() => { setDragId(null); setDragArm(null); }}
                 onDragOver={onDragOver(b, i)} onDrop={(e) => { e.preventDefault(); setDragId(null); setDragArm(null); }}>
-                <header role="button" tabIndex={0} aria-expanded={open === b.id} onClick={() => toggle(b.id)} onKeyDown={onHeadKey(b.id)}>
+                <header role="button" tabIndex={0} aria-expanded={open === b.id} onClick={(e) => { dropRow(e.currentTarget); toggle(b.id); }} onKeyDown={onHeadKey(b.id)}
+                  onPointerEnter={locked ? undefined : holdRow} onFocus={locked ? undefined : holdRow} onPointerLeave={locked ? undefined : releaseRow} onBlur={locked ? undefined : releaseRow}>
                   {!locked && <span className="grip" title="Drag to reorder" aria-hidden onPointerDown={() => setDragArm(b.id)} onPointerUp={() => setDragArm(null)} onClick={(e) => e.stopPropagation()}><I.grip size={14} /></span>}
                   <BlockIcon type={b.type} />
                   <span className="hd"><span className="typ">{BLOCK_LABELS[b.type]}</span><span className="s">{summary(b)}</span></span>
