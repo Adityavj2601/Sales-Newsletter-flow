@@ -13,11 +13,6 @@ import { saveKb, deleteKb, importWebsite } from '../actions';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Our work' };
 
-const PILLAR_UI: Record<string, { icon: string; tone: string }> = {
-  feature: { icon: 'sparkles', tone: 'blue' },
-  delivered: { icon: 'box', tone: 'green' },
-  concept: { icon: 'bulb', tone: 'purple' },
-};
 const STATUS_TONE: Record<string, string> = { live: 'ok', delivered: 'ok', pilot: 'warn', prototype: 'warn', concept: 'info' };
 
 export default async function Knowledge({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; pillar?: string }> }) {
@@ -33,7 +28,7 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
   return (
     <div className="pg kw">
       <div className="ph">
-        <div><span className="eyebrow">{p.name} · what we can show</span><h1>Our work</h1><p className="sub">Features, delivered projects and ideas the newsletter can feature. Each carries an honest status, and the checks block any wording that claims more than that status allows.</p></div>
+        <div><span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span><h1>Our work</h1><p className="sub">Features, delivered projects and ideas the newsletter can feature. Each carries an honest status, and the checks block any wording that claims more than that status allows.</p></div>
         <div className="row">
           {p.website && <form action={importWebsite.bind(null, p.id)}><Submit className="btn" pending="Reading the website…"><Icon name="globe" size={16} />Import from {p.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</Submit></form>}
           <Link className="btn primary" href="/app/knowledge?add=1" scroll={false}><Icon name="plus" size={16} strokeWidth={2.2} />Add item</Link>
@@ -54,39 +49,40 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
 
       {items.length ? Object.entries(PILLARS).map(([key, pl]) => {
         const list = items.filter((k) => k.pillar === key);
-        const ui = PILLAR_UI[key];
         return (
-          <section key={key} className={`kw-sec t-${ui.tone}`} aria-labelledby={`kw-${key}`}>
-            <header className="kw-sec-h">
-              <span className={`cx-tile t-${ui.tone} s-md`} aria-hidden><Icon name={ui.icon} size={16} strokeWidth={2} /></span>
-              <div><h2 id={`kw-${key}`}>{pl.label}<span className="cx-group-n">{list.length}</span></h2><p>{pl.hint}</p></div>
+          <section key={key} className="kw-sec" aria-labelledby={`kw-${key}`}>
+            <div className="kw-sec-h">
+              <h2 id={`kw-${key}`} className="group-title">{pl.label}<span className="cx-group-n">{list.length}</span></h2>
               <Link className="btn sm ghost" href={`/app/knowledge?add=1&pillar=${key}`} scroll={false} aria-label={`New item in ${pl.label}`}><Icon name="plus" size={14} strokeWidth={2.2} />New</Link>
-            </header>
+            </div>
             {list.length ? (
-              <div className="kw-grid">
+              <div className="kw-list">
                 {list.map((k) => (
                   <article key={k.id} className={`card kw-card ${k.active ? '' : 'needs'}`}>
-                    <div className="kw-card-top">
-                      <span className={`pill ${STATUS_TONE[k.status] || ''}`}><span className="dot" />{MATURITY[k.status as keyof typeof MATURITY]?.label || k.status}</span>
-                      {!k.active && <span className="pill warn">Needs review</span>}
+                    <div className="kw-main">
+                      <div className="kw-title-row">
+                        <h3>{k.title}</h3>
+                        <span className={`pill ${STATUS_TONE[k.status] || ''}`}><span className="dot" />{MATURITY[k.status as keyof typeof MATURITY]?.label || k.status}</span>
+                        {!k.active && <span className="pill warn">Needs review</span>}
+                      </div>
+                      <p className="kw-sum">{k.summary || <span className="hint">No description yet.</span>}</p>
                     </div>
-                    <h3>{k.title}</h3>
-                    <p className="kw-sum">{k.summary || <span className="hint">No description yet.</span>}</p>
-                    {k.result && <p className="kw-res"><Icon name="chart" size={14} /><span>{k.result}</span></p>}
-                    {k.client_name && <p className="kw-client"><Icon name="building" size={14} /><span>{k.client_name}</span><span className={`kw-perm ${k.client_permission ? 'ok' : ''}`}>{k.client_permission ? 'May be named' : 'Keep anonymous'}</span></p>}
-                    <footer className="kw-card-f">
+                    <div className="kw-proof">
+                      {k.result && <p className="kw-res"><Icon name="chart" size={14} /><span>{k.result}</span></p>}
+                      {k.client_name && <p className="kw-client"><Icon name="building" size={14} /><span>{k.client_name}</span><span className={`kw-perm ${k.client_permission ? 'ok' : ''}`}>{k.client_permission ? 'May be named' : 'Keep anonymous'}</span></p>}
                       <span className="kw-feat">{k.times_featured ? `Featured ${k.times_featured}× · last ${ago(k.last_featured_at)}` : 'Not featured yet'}</span>
-                      <span className="kw-card-acts">
-                        <Confirm action={deleteKb.bind(null, k.id)} label="Delete" confirmLabel="Delete" className="btn sm ghost cx-danger-text kw-del" />
-                        <Link className={`btn sm ${k.active ? '' : 'primary'}`} href={`/app/knowledge?edit=${k.id}`} scroll={false}>{k.active ? 'Edit' : 'Review'}</Link>
-                      </span>
-                    </footer>
+                    </div>
+                    <div className="kw-card-acts">
+                      <Confirm action={deleteKb.bind(null, k.id)} label="Delete" confirmLabel="Delete" className="btn sm ghost cx-danger-text kw-del" />
+                      <Link className={`btn sm ${k.active ? '' : 'primary'}`} href={`/app/knowledge?edit=${k.id}`} scroll={false} aria-label={`${k.active ? 'Edit' : 'Review'} “${k.title}”`}>{k.active ? 'Edit' : 'Review'}</Link>
+                    </div>
                   </article>
                 ))}
               </div>
             ) : (
               <Link href={`/app/knowledge?add=1&pillar=${key}`} scroll={false} className="kw-blank"><Icon name="plus" size={16} strokeWidth={2.2} />Add something {key === 'feature' ? 'customers can use today' : key === 'delivered' ? 'you built for a client' : 'you could build together'}</Link>
             )}
+            <p className="cx-group-f">{pl.hint}</p>
           </section>
         );
       }) : (

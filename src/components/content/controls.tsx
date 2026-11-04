@@ -1,33 +1,123 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
+import { useFormStatus, createPortal } from 'react-dom';
 import { Submit } from '@/components/ui';
+import { setNavGuard } from '@/components/shell/navGuard';
 import { Icon, Tile } from './icons';
 
-/* ---------- Save bar: sticky glass footer that notices unsaved edits ---------- */
-export function SaveBar({ label = 'Save', pending = 'Saving…', children, note }: { label?: string; pending?: string; children?: React.ReactNode; note?: React.ReactNode }) {
+/* ---------- Save bar: sticky glass footer that notices unsaved edits and guards leaving ---------- */
+/** Where to go once a “Save” chosen in the unsaved-changes alert has finished (module scope: survives a remount). */
+let afterSave: { go: () => void; at: number } | null = null;
+function continueAfterSave() {
+  const a = afterSave;
+  afterSave = null;
+  // Let the save's own redirect and toast settle, then go where the person was heading.
+  if (a && Date.now() - a.at < 20000) setTimeout(a.go, 320);
+}
+
+export function SaveBar({ label = 'Save', pending = 'Saving…', children, note, scope }: { label?: string; pending?: string; children?: React.ReactNode; note?: React.ReactNode; scope?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [dirty, setDirty] = useState(false);
+  const [leaving, setLeaving] = useState<null | (() => void)>(null);
   const { pending: busy } = useFormStatus();
+  const router = useRouter();
   const was = useRef(false);
+  const form = () => ref.current?.closest('form') || null;
+
   useEffect(() => {
-    if (was.current && !busy) setDirty(false);
+    if (was.current && !busy) { setDirty(false); continueAfterSave(); }
     was.current = busy;
   }, [busy]);
+  // The save's redirect can remount this page (its loading boundary); the fresh bar picks up where the old one left off.
+  useEffect(() => { if (afterSave && !busy) continueAfterSave(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const f = ref.current?.closest('form');
+    const f = form();
     if (!f) return;
     const on = (e: Event) => { if ((e.target as HTMLElement)?.closest?.('[data-nodirty]')) return; setDirty(true); };
     f.addEventListener('input', on);
     f.addEventListener('change', on);
     return () => { f.removeEventListener('input', on); f.removeEventListener('change', on); };
   }, []);
+
+  // While there are unsaved edits: catch in-app link clicks (section list, sidebar, tabs), the palette and tab close.
+  useEffect(() => {
+    if (!dirty) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download') || a.closest('[role="alertdialog"]')) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname.startsWith('/api/')) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const to = url.pathname + url.search + url.hash;
+      setLeaving(() => () => router.push(to));
+    };
+    const onUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('click', onClick, true);
+    window.addEventListener('beforeunload', onUnload);
+    setNavGuard((proceed) => { setLeaving(() => proceed); return true; });
+    return () => { window.removeEventListener('click', onClick, true); window.removeEventListener('beforeunload', onUnload); setNavGuard(null); };
+  }, [dirty, router]);
+
+  const revert = () => { form()?.reset(); setDirty(false); };
+  const choose = (what: 'save' | 'discard' | 'cancel') => {
+    const go = leaving;
+    setLeaving(null);
+    if (!go || what === 'cancel') return;
+    if (what === 'discard') { revert(); go(); return; }
+    const f = form();
+    if (!f) return;
+    if (!f.checkValidity()) { f.reportValidity(); return; }
+    afterSave = { go, at: Date.now() };
+    f.requestSubmit();
+  };
+
   return (
     <div ref={ref} className={`cx-savebar ${dirty ? 'dirty' : ''}`}>
       <span className="cx-savebar-msg" aria-live="polite">{dirty ? <><span className="cx-pulse" aria-hidden />Unsaved changes</> : note}</span>
-      <span className="cx-savebar-actions">{children}<Submit pending={pending}>{label}</Submit></span>
+      <span className="cx-savebar-actions">
+        {dirty && !busy && <button type="button" className="btn" onClick={revert}>Revert</button>}
+        {children}<Submit pending={pending}>{label}</Submit>
+      </span>
+      {leaving && <UnsavedAlert scope={scope} onChoose={choose} />}
     </div>
+  );
+}
+
+/** macOS-style “save changes?” alert: Save is the default, Don't save discards, Cancel stays. */
+function UnsavedAlert({ scope, onChoose }: { scope?: string; onChoose: (what: 'save' | 'discard' | 'cancel') => void }) {
+  const save = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    const prevFocus = document.activeElement as HTMLElement | null;
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onChoose('cancel'); } };
+    window.addEventListener('keydown', k);
+    requestAnimationFrame(() => save.current?.focus());
+    return () => { window.removeEventListener('keydown', k); prevFocus?.focus?.({ preventScroll: true }); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!mounted) return null;
+  const h = document.querySelector('.se-head h2')?.textContent;
+  const where = scope || (h ? `the ${h} settings` : 'these settings');
+  return createPortal(
+    <div className="sheet-backdrop cx-alert-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onChoose('cancel'); }}>
+      <div className="sheet cx-alert" role="alertdialog" aria-modal="true" aria-labelledby="cx-alert-t" aria-describedby="cx-alert-d">
+        <span className="cx-alert-ic" aria-hidden><Icon name="warn" size={22} /></span>
+        <h2 id="cx-alert-t">Save your changes?</h2>
+        <p id="cx-alert-d">You changed {where}. If you don’t save, those changes are lost.</p>
+        <div className="cx-alert-actions">
+          <button type="button" className="btn ghost cx-danger-text" onClick={() => onChoose('discard')}>Don’t save</button>
+          <span className="spacer" />
+          <button type="button" className="btn" onClick={() => onChoose('cancel')}>Cancel</button>
+          <button type="button" ref={save} className="btn primary" onClick={() => onChoose('save')}>Save</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -38,6 +128,16 @@ export function SecretField({ name, clearName, saved, masked = '•••••�
   const box = useRef<HTMLSpanElement>(null);
   const touched = useRef(false);
   useEffect(() => { setMode(saved ? 'view' : 'edit'); touched.current = false; }, [saved, masked]);
+  // “Revert” in the save bar resets the form; put the field back to how it was saved too.
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+  useEffect(() => {
+    const f = box.current?.closest('form') || input.current?.closest('form');
+    if (!f) return;
+    const r = () => { touched.current = false; setMode(savedRef.current ? 'view' : 'edit'); };
+    f.addEventListener('reset', r);
+    return () => f.removeEventListener('reset', r);
+  }, []);
   useEffect(() => {
     if (!touched.current) return;
     if (mode === 'edit') input.current?.focus();
@@ -140,14 +240,18 @@ export function BrandColors({ primary, accent, soft, newsletter, tagline, logo }
   const [c, setC] = useState({ primary, accent, soft });
   const [meta, setMeta] = useState({ newsletter, tagline, logo });
   const ref = useRef<HTMLDivElement>(null);
+  const latest = useRef({ primary, accent, soft, newsletter, tagline, logo });
+  latest.current = { primary, accent, soft, newsletter, tagline, logo };
   useEffect(() => { setC({ primary, accent, soft }); }, [primary, accent, soft]);
   useEffect(() => {
     const f = ref.current?.closest('form');
     if (!f) return;
     const val = (n: string) => (f.elements.namedItem(n) as HTMLInputElement | null)?.value ?? '';
     const read = () => setMeta({ newsletter: val('newsletter_name'), tagline: val('tagline'), logo: val('logoUrl') });
+    const reset = () => { const l = latest.current; setC({ primary: l.primary, accent: l.accent, soft: l.soft }); setMeta({ newsletter: l.newsletter, tagline: l.tagline, logo: l.logo }); };
     f.addEventListener('input', read);
-    return () => f.removeEventListener('input', read);
+    f.addEventListener('reset', reset);
+    return () => { f.removeEventListener('input', read); f.removeEventListener('reset', reset); };
   }, []);
   const swatches = [['primary', 'Primary', 'Header and headings'], ['accent', 'Accent', 'Buttons and highlights'], ['soft', 'Soft background', 'Page and card tint']] as const;
   const okLogo = /^https?:\/\//.test(meta.logo);

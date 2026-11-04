@@ -57,28 +57,34 @@ export default async function Stories({ searchParams }: { searchParams: Promise<
   const short = byStatus.shortlisted || 0;
   const pool = count('open');
   const hint = short === 0 ? (pool ? 'Star at least one to unlock drafting; 3–6 is ideal' : 'Fetch news, then star the ones worth writing about') : short < 3 ? `Star ${3 - short} more for a full draft` : short <= GOAL ? 'Ready to draft' : 'Plenty. The draft uses the best six';
+  const emptyPool = f === 'open' && !q && pool === 0;
   const qs = (k: string) => `/app/stories?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
 
   return (
     <div className="pg st">
       <div className="ph">
         <div>
-          <span className="eyebrow">Inputs for the next draft</span>
+          <span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span>
           <h1>Story pool</h1>
           <p className="sub">News from your sources, scored for how much {p.name}’s readers will care. Star the ones worth writing about; the draft uses your shortlist first.</p>
         </div>
-        <div className="row">
-          <form action={fetchNewsNow}><Submit className="btn" pending="Fetching…"><Icon name="refresh" size={16} />Fetch news now</Submit></form>
-          {short > 0
-            ? <Link className="btn primary" href="/app/editions?new=1"><Icon name="sparkles" size={16} />Draft from shortlist <span className="tnum">({short})</span></Link>
-            : <span className="btn" role="link" aria-disabled="true" aria-describedby="st-why" title="Shortlist at least one story first"><Icon name="sparkles" size={16} />Draft from shortlist</span>}
-        </div>
+        {/* An empty pool has one action, in the empty state below; the header stays quiet until there is something to draft from. */}
+        {!emptyPool && (
+          <div className="row">
+            <form action={fetchNewsNow}><Submit className="btn" pending="Fetching…"><Icon name="refresh" size={16} />Fetch news now</Submit></form>
+            {short > 0
+              ? <Link className="btn primary" href="/app/editions?new=1"><Icon name="sparkles" size={16} />Draft from shortlist <span className="tnum">({short})</span></Link>
+              : <span className="btn" role="link" aria-disabled="true" aria-describedby="st-why" title="Shortlist at least one story first"><Icon name="sparkles" size={16} />Draft from shortlist</span>}
+          </div>
+        )}
       </div>
 
       <div className="st-status">
         <div className={`st-meter ${short >= 3 ? 'ready' : ''}`}>
-          <span className="st-pips" aria-hidden>{Array.from({ length: GOAL }, (_, i) => <i key={i} className={i < short ? 'on' : ''} />)}</span>
-          <span id="st-why"><b className="tnum">{short} shortlisted</b><span className="st-dim"> · {hint}</span></span>
+          {short > 0
+            ? <span className="st-pips" role="img" aria-label={`${Math.min(short, GOAL)} of ${GOAL} shortlisted`}>{Array.from({ length: GOAL }, (_, i) => <i key={i} className={i < short ? 'on' : ''} />)}</span>
+            : <Icon name="star" size={16} className="cx-ic st-star-ic" />}
+          <span id="st-why"><b className="tnum">{short ? `${short} shortlisted` : 'Nothing shortlisted yet'}</b><span className="st-dim"> · {hint}</span></span>
         </div>
         <span className="st-src">
           <Icon name="clock" size={15} />
@@ -91,7 +97,7 @@ export default async function Stories({ searchParams }: { searchParams: Promise<
       <form action={addStory} className="st-add">
         <Icon name="link" size={18} />
         <input className="in" aria-label="Article URL" type="url" name="url" required placeholder="Paste an article link" />
-        <Submit className="btn primary" pending="Reading…">Add story</Submit>
+        <Submit className={`btn${emptyPool ? '' : ' primary'}`} pending="Reading…">Add story</Submit>
       </form>
 
       <div className="st-tools">

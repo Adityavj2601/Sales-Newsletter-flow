@@ -31,19 +31,19 @@ export default async function Notifications() {
     <div className="pg notif-page">
       <div className="ph">
         <div>
-          <span className="eyebrow">{unread > 0 ? `${unread} unread` : 'Activity'}</span>
+          <span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span>
           <h1>Notifications</h1>
-          <p className="sub">Interest taps, drafts ready for review, sends and automation problems. Interest taps are also emailed to your alert address.</p>
+          <p className="sub">{unread > 0 ? `${unread} unread. ` : rows.length ? 'You’re all caught up. ' : ''}Interest taps, drafts ready for review, sends and automation problems. Interest taps are also emailed to your alert address.</p>
         </div>
         {unread > 0 ? (
           <form action={markAllRead} className="row">
             <Submit className="btn" pending="Marking…"><Icon name="check" size={15} strokeWidth={2.2} />Mark all read</Submit>
           </form>
-        ) : rows.length > 0 && <span className="pill ok"><Icon name="check" size={13} strokeWidth={2.4} />All caught up</span>}
+        ) : null}
       </div>
       {rows.length ? groups.map((g) => (
         <section key={g.label} className="ngroup" aria-labelledby={`ng-${g.label}`}>
-          <h2 id={`ng-${g.label}`} className="ngroup-h">{g.label}<span>{g.rows.length}</span></h2>
+          <h2 id={`ng-${g.label}`} className="group-title">{g.label}<span className="cx-group-n">{g.rows.length}</span></h2>
           <ul className="tl nlist card">{g.rows.map((n) => {
             const title = cleanTitle(n.title);
             return (

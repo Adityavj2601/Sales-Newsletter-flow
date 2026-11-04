@@ -62,7 +62,7 @@ export default async function Automations() {
   return (
     <div className="pg au">
       <div className="ph">
-        <div><span className="eyebrow">Runs by itself every week</span><h1>Automations</h1><p className="sub">Each job runs on its own schedule in {tz.replace('_', ' ')} time. Scheduled sends and the email queue are checked every minute while the app is running. Nothing is ever sent without your approval.</p></div>
+        <div><span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span><h1>Automations</h1><p className="sub">Each job runs on its own schedule in {tz.replace('_', ' ')} time. Scheduled sends and the email queue are checked every minute while the app is running. Nothing is ever sent without your approval.</p></div>
       </div>
 
       <div className="au-grid">
@@ -73,7 +73,7 @@ export default async function Automations() {
         <div className="au-hist-h"><h2 id="au-hist-h" className="section-title">Run history</h2><span className="hint">Last {runs.length} run{runs.length === 1 ? '' : 's'}. Tap one to see its log.</span></div>
         {days.length ? days.map((d) => (
           <div key={d.key} className="au-day">
-            <h3 className="cx-group-h">{d.label}</h3>
+            <h3 className="group-title">{d.label}<span className="cx-group-n">{d.items.length}</span></h3>
             <ol className="au-tl">
               {d.items.map((r) => {
                 const ui = JOB_UI[r.type] || { icon: 'bolt', tone: 'gray' };

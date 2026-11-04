@@ -2,15 +2,31 @@ import { Suspense } from 'react';
 import { requireUser } from '@/lib/auth';
 import { activeProduct } from '@/lib/context';
 import { listProducts, getSetting } from '@/lib/settings';
-import { get } from '@/lib/db';
+import { all, get, parse } from '@/lib/db';
 import { seedProducts } from '@/lib/seed';
-import { Nav, ProductSwitch, Flash, MobileToggle, CloseOnNav, MenuClose, ScrollEdge } from '@/components/ui';
-import { CommandPalette, PaletteButton } from '@/components/shell/CommandPalette';
+import { Nav, ProductSwitch, Flash, MobileToggle, CloseOnNav, MenuClose, ScrollEdge, SegmentInView } from '@/components/ui';
+import { CommandPalette, PaletteButton, type PaletteItem } from '@/components/shell/CommandPalette';
 import { Icon } from '@/components/shell/icons';
 import { Avatar } from '@/components/bits';
 import { switchProduct, logout } from './actions';
 
 export const dynamic = 'force-dynamic';
+
+const ED_STATUS: Record<string, string> = { draft: 'Draft', review: 'In review', approved: 'Approved', scheduled: 'Scheduled', sending: 'Sending', sent: 'Sent' };
+
+/** What ⌘K can find in the active product: recent people, every edition, and the stories still in play. */
+function paletteIndex(productId: string): PaletteItem[] {
+  const people = all("SELECT id, first_name, last_name, email, company FROM contacts WHERE product_id = ? ORDER BY COALESCE(last_engaged_at, created_at) DESC LIMIT 200", productId)
+    .map((c): PaletteItem => {
+      const name = `${c.first_name || ''} ${c.last_name || ''}`.trim();
+      return { k: 'c', id: c.id, label: name || String(c.email || 'Unnamed contact'), hint: c.company || (name ? c.email : undefined) || undefined, href: `/app/contacts/${c.id}` };
+    });
+  const editions = all('SELECT id, number, status, content FROM editions WHERE product_id = ? ORDER BY number DESC LIMIT 100', productId)
+    .map((e): PaletteItem => ({ k: 'e', id: e.id, label: `#${e.number} ${parse<{ title?: string }>(e.content, {}).title || 'Untitled edition'}`, hint: ED_STATUS[e.status] || e.status, href: `/app/editions/${e.id}` }));
+  const stories = all("SELECT id, title, publisher FROM stories WHERE product_id = ? AND status IN ('new','shortlisted') ORDER BY score DESC, created_at DESC LIMIT 50", productId)
+    .map((s): PaletteItem => ({ k: 's', id: s.id, label: String(s.title), hint: String(s.publisher || '').replace(/^Google News:\s*/i, '') || undefined, href: `/app/stories?q=${encodeURIComponent(String(s.title).slice(0, 80))}` }));
+  return [...people, ...editions, ...stories];
+}
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -31,9 +47,11 @@ export default async function StudioLayout({ children }: { children: React.React
   return (
     <div className="shell">
       <a className="skip-link" href="#main">Skip to content</a>
+      {/* Every item is icon + text in its own span, with an accessible name on the control itself,
+          so the editor can collapse this into an icon-only rail (`.ed-route .side`) without losing labels. */}
       <aside className="side" id="sidebar" aria-label="Sidebar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden><Icon name="editions" size={16} strokeWidth={2} /></span>
+          <span className="brand-mark" aria-hidden title={g.appName}><Icon name="editions" size={16} strokeWidth={2} /></span>
           <span className="brand-name">{g.appName}</span>
           <MenuClose />
         </div>
@@ -41,9 +59,9 @@ export default async function StudioLayout({ children }: { children: React.React
         {p && <ProductSwitch products={plist} current={p.id} action={switchProduct} />}
         <Nav counts={counts} />
         <div className="side-foot">
-          <Avatar name={user.name || user.email} size={30} />
+          <span title={`${user.name} · ${user.email}`}><Avatar name={user.name || user.email} size={30} /></span>
           <span className="who"><span className="sr">Signed in as </span><b>{user.name}</b><small>{user.email}</small></span>
-          <form action={logout}><button type="submit" className="signout" title="Sign out"><Icon name="signout" size={17} /><span className="sr">Sign out</span></button></form>
+          <form action={logout}><button type="submit" className="signout" title="Sign out" aria-label="Sign out"><Icon name="signout" size={17} /></button></form>
         </div>
       </aside>
       <div className="stage">
@@ -54,8 +72,8 @@ export default async function StudioLayout({ children }: { children: React.React
         </header>
         <main className="main" id="main">{children}</main>
       </div>
-      <CommandPalette products={plist} current={p?.id} switchAction={switchProduct} logoutAction={logout} />
-      <Suspense><Flash /><CloseOnNav /><ScrollEdge /></Suspense>
+      <CommandPalette products={plist} current={p?.id} switchAction={switchProduct} logoutAction={logout} items={p ? paletteIndex(p.id) : []} />
+      <Suspense><Flash /><CloseOnNav /><ScrollEdge /><SegmentInView /></Suspense>
     </div>
   );
 }

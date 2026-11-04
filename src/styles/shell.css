@@ -274,11 +274,15 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .setup-m .checklist { padding: 6px 8px 10px; border-top: 0.5px solid var(--line-2); }
 @media (max-width: 700px) { .card.setup { display: none; } .setup-m { display: block; } }
 
-.home-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 18px; align-items: stretch; }
-.home-grid.even { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+/* One column template for the whole dashboard: two stacks, so a short card never leaves a hole beside a tall one. */
+.home-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.home-col { display: grid; gap: 18px; min-width: 0; align-content: start; }
+.home-col > div { display: contents; }
 .card.hero { display: flex; flex-direction: column; }
-.card.hero .card-head { margin-bottom: 12px; }
-.hero-body { display: grid; gap: 12px; align-content: start; flex: 1; }
+.card.hero .card-head { margin-bottom: 14px; }
+.card.hero .flow-stepper { margin-bottom: 18px; }
+.hero-body { display: grid; gap: 14px; align-content: start; flex: 1; }
+.hero-ed { display: grid; gap: 8px; }
 .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .hero-meta .pill { padding: 3px 9px; }
 .hero-title { font: 700 26px/1.18 var(--f-display); letter-spacing: -0.026em; text-wrap: balance; max-width: 28ch; }
@@ -294,15 +298,7 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .chip-link:hover { background: var(--accent-soft); color: var(--accent); opacity: 1; }
 .chip-link:active { transform: scale(0.96); }
 
-/* Weekly flow stepper + the one “Next step” */
-.flow { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-.flow li { display: grid; gap: 6px; min-width: 0; font-size: 12px; font-weight: 500; color: var(--faint); }
-.flow-bar { display: block; height: 4px; border-radius: 999px; background: var(--fill-2); transition: background var(--t2) var(--ease); }
-.flow-l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.flow li.done .flow-bar { background: color-mix(in srgb, var(--accent) 45%, transparent); }
-.flow li.done .flow-l { color: var(--muted); }
-.flow li.now .flow-bar { background: var(--accent); }
-.flow li.now .flow-l { color: var(--accent); font-weight: 600; }
+/* The one “Next step” (title and action come from lib/flow.ts) */
 .next-step {
   display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px 14px; align-items: center; padding: 14px 16px;
   border-radius: var(--r); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-2);
@@ -312,19 +308,14 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .next-step-t .hint { line-height: 1.45; margin-top: 1px; }
 .next-step-cta { display: flex; }
 
-.card.kpis { display: flex; flex-direction: column; }
-.kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; flex: 1; }
-.kpi-grid .meter { margin-top: 6px; }
-/* Tiles share the card height: icon, number and label stay top-aligned across a row; meta settles at the bottom. */
-.kpi-grid { grid-auto-rows: 1fr; }
-.kpi-grid .stat-tile { grid-template-rows: auto auto auto 1fr; min-height: 132px; }
-.kpi-grid .stat-tile > .meter { align-self: end; }
-
+/* Tiles size to their content (icon, number, label, one meta line), never stretched to a neighbour's height. */
+.kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.kpi-grid .stat-tile .icon-chip { margin-bottom: 6px; }
 
 .people, .feed, .jobs, .status-list { list-style: none; margin: 0; padding: 0; }
 .people { display: grid; gap: 2px; margin: -6px -10px; }
 .person {
-  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 64px; align-items: center; gap: 12px; padding: 9px 10px; border-radius: var(--r); color: var(--ink);
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) 56px; align-items: center; gap: 12px; padding: 9px 10px; border-radius: var(--r); color: var(--ink);
   transition: background var(--t1) var(--ease), transform var(--t1) var(--ease);
 }
 .person:hover { background: var(--hover); opacity: 1; }
@@ -346,15 +337,14 @@ a.feed-title:hover { color: var(--accent); opacity: 1; }
 .feed-sub { color: var(--muted); font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .feed time, .jobs time { color: var(--faint); font-size: 12px; white-space: nowrap; padding-top: 2px; }
 
-.card.system { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px 36px; }
-.system .card-head { margin-bottom: 10px; }
-.jobs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+.system .card-head { margin-bottom: 8px; }
+.home .system .group-title { margin: 16px 0 6px; padding-top: 14px; border-top: 0.5px solid var(--line-2); }
+.jobs { display: grid; gap: 0; }
 .jobs li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; padding: 6px 0; }
 .jobs li .ico { color: var(--faint); }
 .jobs li span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jobs time { padding: 0; }
-.system-status { border-left: 0.5px solid var(--line); padding-left: 32px; }
-.status-list { display: grid; gap: 4px; }
+.status-list { display: grid; gap: 0; }
 .status-list li { display: grid; grid-template-columns: 8px 18px 80px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px; padding: 5px 0; }
 .status-list li .ico { color: var(--muted); }
 .status-list li a { font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -366,37 +356,35 @@ a.feed-title:hover { color: var(--accent); opacity: 1; }
 @media (max-width: 1180px) {
   .card.setup { grid-template-columns: minmax(0, 1fr); }
 }
+/* Narrow: one column, in reading order — the edition, its numbers, people, activity, then the system. */
 @media (max-width: 1060px) {
-  .home-grid, .home-grid.even { grid-template-columns: minmax(0, 1fr); }
+  .home-grid { grid-template-columns: minmax(0, 1fr); }
+  .home-grid, .home-col { display: grid; gap: 18px; }
+  .home-col { display: contents; }
+  .home-grid > .home-col > .card.hero { order: 1; }
+  .home-grid > .home-col > .card.kpis { order: 2; }
+  .home-grid .h-leads { order: 3; }
+  .home-grid .h-act { order: 4; }
+  .home-grid .h-sys { order: 5; }
+  .home-grid > .home-col > div { display: block; }
 }
 @media (max-width: 760px) {
   .checklist { grid-template-columns: minmax(0, 1fr); }
-  .card.system { grid-template-columns: minmax(0, 1fr); }
-  .system-status { border-left: 0; padding-left: 0; border-top: 0.5px solid var(--line); padding-top: 16px; }
-  .jobs { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
-  .card.system { padding: 18px; }
   .hero-title { font-size: 22px; }
-  .flow { gap: 4px; }
-  .flow li:not(.now) .flow-l { visibility: hidden; }
-  .flow li.now .flow-l { overflow: visible; }
   .next-step { grid-template-columns: 30px minmax(0, 1fr); }
   .next-step-cta { grid-column: 1 / -1; }
   .next-step-cta > *, .next-step-cta .btn { flex: 1; width: 100%; }
   .hero-actions .btn { flex: 1 1 auto; }
   .kpi-grid .stat-tile { padding: 14px; }
   .kpi-grid .stat-tile .sv { font-size: 26px; }
-  .person { grid-template-columns: 34px minmax(0, 1fr) 44px; row-gap: 6px; }
-  .person > .pill, .person > .hint { grid-column: 2; grid-row: 2; justify-self: start; }
-  .person .score { grid-column: 3; grid-row: 1 / span 2; }
+  .person { grid-template-columns: 34px minmax(0, 1fr) 44px; }
   .status-list li { grid-template-columns: 8px 18px 72px minmax(0, 1fr); }
 }
 
 /* ---------- Notifications ---------- */
 .ngroup { display: grid; gap: 8px; }
-.ngroup-h { display: flex; align-items: center; gap: 8px; font: 600 13px var(--f-ui); color: var(--muted); letter-spacing: 0; margin: 4px 0 0 4px; }
-.ngroup-h span { font-size: 11.5px; color: var(--faint); background: var(--fill); border-radius: 999px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
 ul.tl.nlist { gap: 0; padding: 6px; }
 ul.tl.nlist li {
   position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 8px; gap: 14px; align-items: center; padding: 12px 12px; border-radius: var(--r);
@@ -601,9 +589,21 @@ a.ntitle:hover { color: var(--accent); opacity: 1; }
 
 /* ---------- Common page polish in this area ---------- */
 .empty .empty-ic + b { margin-top: 2px; }
-/* Phones: header actions share one full-width row (they wrap to full-width rows when they can’t fit) */
-@media (max-width: 560px) {
-  .pg > .ph > .row:not(.so-sum) { width: 100%; }
-  .pg > .ph > .row > * { flex: 1 1 auto; }
+/* Phone header actions follow the shared rule in globals; forms inside the row fill their cell like a button. */
+@media (max-width: 700px) {
   .pg > .ph > .row > form > .btn { width: 100%; }
+  /* A “⋯” menu keeps its icon size beside a full-width primary. */
+  .pg > .ph > .row:has(> .ph-more) { grid-template-columns: minmax(0, 1fr); grid-auto-columns: auto; }
+  .pg > .ph > .row > .ph-more { justify-self: end; }
 }
+/* Group headings in this area align with the card edge. */
+:is(.home, .st, .so, .kw, .au, .se, .notif-page, .outbox) .group-title { margin: 0; }
+
+/* ---------- Round 3 ---------- */
+/* ⌘K: one focus treatment (the panel), no second ring around the field; matched letters in bold ink */
+.cmdk-field input:focus, .cmdk-field input:focus-visible { outline: none; box-shadow: none; border-radius: 0; }
+.cmdk-lbl mark { font-weight: 700; color: var(--ink); }
+.cmdk-item[aria-selected="true"] .cmdk-lbl mark { color: #fff; }
+/* Page-header “⋯” menu: a round fill button the height of its neighbours */
+.ph-more .so-more { width: 36px; height: 36px; background: var(--fill); color: var(--ink); }
+.ph-more .so-more:hover, .ph-more .so-more[aria-expanded="true"] { background: var(--fill-2); }
