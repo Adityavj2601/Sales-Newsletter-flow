@@ -31,16 +31,16 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
   const maturity = Object.fromEntries(Object.entries(MATURITY).map(([k, v]) => [k, { label: v.label, allowed: v.allowed, banned: v.banned }]));
 
   return (
-    <div className="stack kw" style={{ gap: 24 }}>
+    <div className="pg kw">
       <div className="ph">
-        <div><div className="eyebrow">{p.name}</div><h1>Our work</h1><p className="sub">Features, delivered projects and ideas the newsletter can feature. Each carries an honest status, and the checks block any wording that claims more than that status allows.</p></div>
+        <div><span className="eyebrow">{p.name} · what we can show</span><h1>Our work</h1><p className="sub">Features, delivered projects and ideas the newsletter can feature. Each carries an honest status, and the checks block any wording that claims more than that status allows.</p></div>
         <div className="row">
           {p.website && <form action={importWebsite.bind(null, p.id)}><Submit className="btn" pending="Reading the website…"><Icon name="globe" size={16} />Import from {p.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</Submit></form>}
           <Link className="btn primary" href="/app/knowledge?add=1" scroll={false}><Icon name="plus" size={16} strokeWidth={2.2} />Add item</Link>
         </div>
       </div>
 
-      {!configuredProviders().length && p.website && <div className="cx-callout info"><span className="cx-callout-i"><Icon name="info" size={18} /></span><div>Website import reads your site and, with an AI key connected, suggests items for you to confirm. Without a key it only fills in the description.</div></div>}
+      {!configuredProviders().length && p.website && <div className="notice"><span className="ni" aria-hidden>i</span><div>Website import reads your site and, with an AI key connected, suggests items for you to confirm. Without a key it only fills in the description.</div></div>}
 
       <section className="kw-about">
         <div className="kw-about-h"><span className="eyebrow">About {p.name}</span><Link href={`/app/settings?tab=products&p=${p.id}`}>Edit profile<Icon name="chevron" size={13} strokeWidth={2.2} /></Link></div>
@@ -49,7 +49,7 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
       </section>
 
       {review.length > 0 && (
-        <div className="cx-callout warn"><span className="cx-callout-i"><Icon name="warn" size={18} /></span><div><b>{review.length} item{review.length === 1 ? '' : 's'} need{review.length === 1 ? 's' : ''} your review.</b> Imported or unconfirmed items are never used until you confirm their real status.</div></div>
+        <div className="notice warn"><span className="ni" aria-hidden>!</span><div><b>{review.length} item{review.length === 1 ? '' : 's'} need{review.length === 1 ? 's' : ''} your review.</b> Imported or unconfirmed items are never used until you confirm their real status.</div></div>
       )}
 
       {items.length ? Object.entries(PILLARS).map(([key, pl]) => {

@@ -8,7 +8,8 @@ type Cmd = { id: string; label: string; group: 'Actions' | 'Go to' | 'Products' 
 
 export const openPalette = () => window.dispatchEvent(new Event('cmdk:open'));
 
-/** Subsequence fuzzy match. Returns a score (higher is better) and the matched character indexes, or null. */
+/** Subsequence fuzzy match. Returns a score (higher is better) and the indexes to highlight, or null.
+ *  Only a contiguous substring match is highlighted: scattered single letters read as noise. */
 function fuzzy(q: string, text: string): { score: number; hits: number[] } | null {
   if (!q) return { score: 0, hits: [] };
   const t = text.toLowerCase();
@@ -23,7 +24,7 @@ function fuzzy(q: string, text: string): { score: number; hits: number[] } | nul
     score += at === last + 1 ? 12 : at === 0 || t[at - 1] === ' ' ? 10 : 1;
     hits.push(at); last = at; ti = at + 1;
   }
-  return { score: score - t.length * 0.1, hits };
+  return { score: score - t.length * 0.1, hits: [] };
 }
 
 function Mark({ text, hits }: { text: string; hits: number[] }) {

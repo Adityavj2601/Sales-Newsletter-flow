@@ -47,9 +47,9 @@ export default async function Setup({ searchParams }: { searchParams: Promise<{ 
             <p className="hint">Create the admin account. Your two products (Unada and HeyVeya), news sources, weekly automations and the four month-1 sample editions will be set up for you.</p>
           </div>
           <ul className="auth-gets" aria-label="Set up for you">
-            {gets.map(([ic, t, s]) => <li key={t}><span className="kind kind-blue" aria-hidden><Icon name={ic} size={15} /></span><span><b>{t}</b><small>{s}</small></span></li>)}
+            {gets.map(([ic, t, s]) => <li key={t}><span className="icon-chip" aria-hidden><Icon name={ic} size={15} /></span><span><b>{t}</b><small>{s}</small></span></li>)}
           </ul>
-          {sp.e && <div className="notice bad" role="alert"><Icon name="warn" size={16} />Fill in every field. The password needs at least 8 characters.</div>}
+          {sp.e && <div className="notice bad" role="alert"><span className="ni" aria-hidden>!</span><div>Fill in every field. The password needs at least 8 characters.</div></div>}
           <AuthField label="Your name" name="name" icon="person" required autoComplete="name" autoFocus />
           <AuthField label="Work email" name="email" kind="email" icon="mail" required autoComplete="email" hint="Sales alerts go here until you change it." placeholder="you@company.com" />
           <AuthField label="Password" name="password" kind="new-password" icon="lock" minLength={8} required autoComplete="new-password" />

@@ -41,7 +41,7 @@ function JobBody({ job, presets, run, on, setOn }: { job: JobView; presets: { la
         <Tile icon={job.icon} tone={job.tone} />
         <div className="au-title">
           <h2>{job.label}</h2>
-          <p className="au-when"><Icon name="clock" size={14} /><span>{human === 'Custom schedule' && (sel || custom) ? <code>{sel || custom}</code> : human}</span></p>
+          <p className="au-when"><Icon name="clock" size={14} /><span>{human === 'Custom schedule' && (sel || custom) ? <span className="tnum">{sel || custom}</span> : human}</span></p>
         </div>
         <span className="au-switch">
           {saving && <span className="au-saving" aria-live="polite"><Spinner size={13} />Saving</span>}
@@ -61,7 +61,7 @@ function JobBody({ job, presets, run, on, setOn }: { job: JobView; presets: { la
         {sel === '' && (
           <div className="au-custom">
             <label className="au-field"><span>Cron (minute hour day month weekday)</span>
-              <input ref={customRef} className="in mono" name="cron_custom" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 9 * * 1" spellCheck={false} />
+              <input ref={customRef} className="in tnum" name="cron_custom" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 9 * * 1" spellCheck={false} />
             </label>
             <button type="submit" className="btn sm primary" disabled={pending}>Save</button>
           </div>

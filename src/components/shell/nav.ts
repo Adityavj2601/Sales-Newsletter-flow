@@ -12,7 +12,7 @@ export const NAV: NavGroup[] = [
     { href: '/app/leads', label: 'Leads', icon: 'leads', key: 'leads', keywords: 'interested hot pipeline' },
   ] },
   { grp: 'Inputs', items: [
-    { href: '/app/knowledge', label: 'Our work (knowledge)', icon: 'knowledge', key: 'kb', keywords: 'case studies products kb' },
+    { href: '/app/knowledge', label: 'Our work', icon: 'knowledge', key: 'kb', keywords: 'knowledge case studies products kb' },
     { href: '/app/contacts', label: 'Contacts', icon: 'contacts', keywords: 'people audience list' },
     { href: '/app/sources', label: 'News sources', icon: 'sources', keywords: 'rss feeds' },
   ] },

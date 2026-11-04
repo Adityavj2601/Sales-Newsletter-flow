@@ -42,6 +42,13 @@ PUBLIC_BASE_URL=https://brief.yourdomain.com docker compose up -d --build
 
 Data (database, uploads, encryption key) lives in `./data`. **Back up that folder.**
 
+### Running it day to day
+
+- The app runs as **one Node process** (`npm run build && npm start`, or Docker). It needs Node 22.13 or newer.
+- Everything it stores lives in the `data/` folder (or `DATA_DIR`): the SQLite database, uploads and the encryption key. Back that folder up.
+- Set the public address (Settings → General, or `PUBLIC_BASE_URL`) so links and preview images work for readers.
+- Without AI keys, drafts are assembled in demo mode. Without SMTP, emails land in the in-app Outbox. Both still let you try the whole weekly flow.
+
 ### Environment variables (all optional)
 
 | Variable | What it does |

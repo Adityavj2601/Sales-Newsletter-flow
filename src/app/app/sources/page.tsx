@@ -1,14 +1,37 @@
 import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
-import { ago, fmtDate } from '@/lib/format';
+import { fmtDate } from '@/lib/format';
 import { gnewsUrl } from '@/lib/ingest';
-import { Confirm } from '@/components/ui';
 import { Icon, Tile } from '@/components/content/icons';
-import { SourceForm, SourceSwitch } from '@/components/content/sources';
+import { Ago } from '@/components/shell/Motion';
+import { SourceForm, SourceSwitch, SourceMenu } from '@/components/content/sources';
 import { addSource, toggleSource, deleteSource } from '../actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'News sources' };
+
+/** A Google News query as readable tokens: “exact phrases” and word runs become chips, OR and exclusions read as words. */
+function QueryChips({ q }: { q: string }) {
+  const parts = String(q).match(/-?"[^"]*"|-?“[^”]*”|\S+/g) || [];
+  const out: React.ReactNode[] = [];
+  let run: string[] = [];
+  const flush = () => { if (run.length) out.push(<span key={out.length} className="so-tok">{run.join(' ')}</span>); run = []; };
+  for (const t of parts) {
+    if (t === 'OR' || t === '|') { flush(); out.push(<span key={out.length} className="so-op">or</span>); continue; }
+    const neg = t.startsWith('-') && t.length > 1;
+    const body = neg ? t.slice(1) : t;
+    const quoted = /^["“].*["”]$/.test(body);
+    if (!neg && !quoted) { run.push(body); continue; }
+    flush();
+    const txt = quoted ? `“${body.slice(1, -1)}”` : body;
+    out.push(<span key={out.length} className={`so-tok${neg ? ' not' : ''}`}>{neg && <span className="sr">not </span>}{txt}</span>);
+  }
+  flush();
+  return <span className="so-q-chips" aria-label={`Search: ${q}`}>{out}</span>;
+}
+
+const feedLabel = (u: string) => { try { const x = new URL(u); return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/$/, '')).slice(0, 80); } catch { return u; } };
+const niceName = (n: string) => { const s = String(n || '').replace(/^Google News:\s*/i, '').trim(); return s.replace(/^\p{Ll}/u, (c) => c.toUpperCase()); };
 
 export default async function Sources() {
   const p = await requireProduct();
@@ -20,9 +43,9 @@ export default async function Sources() {
     { kind: 'rss', title: 'RSS feeds', icon: 'rss', tone: 'orange' },
   ];
   return (
-    <div className="stack so" style={{ gap: 22 }}>
+    <div className="pg so">
       <div className="ph">
-        <div><div className="eyebrow">Where stories come from</div><h1>News sources</h1><p className="sub">Google News searches (India edition, last 7 days) and RSS feeds. The “Fetch news” automation reads every active source each morning. Sources are shared by every product unless marked otherwise.</p></div>
+        <div><span className="eyebrow">Where stories come from</span><h1>News sources</h1><p className="sub">Google News searches (India edition, last 7 days) and RSS feeds. The “Fetch news” automation reads every active source each morning. Sources are shared by every product unless marked otherwise.</p></div>
         <div className="so-sum" aria-label="Source summary">
           <span><b>{active}</b> active</span>
           <span><b>{rows.length - active}</b> paused</span>
@@ -37,29 +60,30 @@ export default async function Sources() {
         if (!list.length) return null;
         return (
           <section key={g.kind} className="cx-group so-group">
-            <h3 className="cx-group-h"><Tile icon={g.icon} tone={g.tone} size="sm" />{g.title}<span className="cx-group-n">{list.length}</span></h3>
+            <h2 className="cx-group-h"><Tile icon={g.icon} tone={g.tone} size="sm" />{g.title}<span className="cx-group-n">{list.length}</span></h2>
             <ul className="cx-group-box so-list">
               {list.map((r) => {
                 const state = !r.active ? 'off' : r.last_error ? 'bad' : r.last_fetched_at ? 'ok' : 'idle';
                 const stateLabel = { off: 'Paused', bad: 'Last read failed', ok: 'Working', idle: 'Not read yet' }[state];
                 const href = r.kind === 'gnews' ? gnewsUrl(r.url) : r.url;
+                const name = niceName(r.name);
                 return (
                   <li key={r.id} className={`so-row ${state}`}>
                     <span className={`so-dot ${state}`} role="img" aria-label={stateLabel} title={stateLabel} />
                     <div className="so-main">
-                      <div className="so-name"><b>{r.kind === 'gnews' ? String(r.name).replace(/^Google News:\s*/i, '') : r.name}</b>{r.product_id && <span className="pill info">Only {p.name}</span>}</div>
-                      <a className="so-url" href={href} target="_blank" rel="noreferrer" title={r.url}>{r.url}</a>
+                      <div className="so-name"><b>{name}</b>{r.product_id && <span className="pill info">Only {p.name}</span>}</div>
+                      <div className="so-url" title={r.url}>{r.kind === 'gnews' ? <QueryChips q={r.url} /> : <span className="so-feed">{feedLabel(r.url)}</span>}</div>
                       <div className="so-stat">
                         {r.last_error
-                          ? <span className="so-err" title={r.last_error}><Icon name="warn" size={13} />Failed {ago(r.last_fetched_at)}: {String(r.last_error).slice(0, 80)}</span>
+                          ? <span className="so-err" title={r.last_error}><Icon name="warn" size={13} />Failed <Ago iso={r.last_fetched_at} />: {String(r.last_error).slice(0, 80)}</span>
                           : r.last_fetched_at
-                            ? <span title={fmtDate(r.last_fetched_at, undefined, true)}>Read {ago(r.last_fetched_at)} · {r.last_count ?? 0} new</span>
+                            ? <span title={fmtDate(r.last_fetched_at, undefined, true)}>Read <Ago iso={r.last_fetched_at} /> · <span className="tnum">{r.last_count ?? 0}</span> new</span>
                             : <span>Not read yet</span>}
                       </div>
                     </div>
                     <div className="so-ctl">
-                      <SourceSwitch action={toggleSource.bind(null, r.id)} active={!!r.active} name={r.name} />
-                      <Confirm action={deleteSource.bind(null, r.id)} label="Delete" confirmLabel={r.product_id ? 'Delete' : 'Delete for all'} className="btn sm ghost cx-danger-text" />
+                      <SourceSwitch action={toggleSource.bind(null, r.id)} active={!!r.active} name={name} />
+                      <SourceMenu name={name} href={href} shared={!r.product_id} del={deleteSource.bind(null, r.id)} />
                     </div>
                   </li>
                 );

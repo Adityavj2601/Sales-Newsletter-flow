@@ -2,10 +2,11 @@ import Link from 'next/link';
 import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
 import { getSetting } from '@/lib/settings';
-import { ago, todayIn, utcToZonedInput, TZ_DEFAULT } from '@/lib/format';
+import { todayIn, utcToZonedInput, fmtTime, TZ_DEFAULT } from '@/lib/format';
 import { Submit } from '@/components/ui';
 import { Icon } from '@/components/shell/icons';
-import { KindIcon, cleanTitle } from '@/components/shell/kinds';
+import { KindIcon, cleanTitle, typo } from '@/components/shell/kinds';
+import { Ago } from '@/components/shell/Motion';
 import { markAllRead } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -25,18 +26,17 @@ export default async function Notifications() {
     g.rows.push(r);
   }
   const unread = rows.filter((r) => !r.read_at).length;
-  const time = new Intl.DateTimeFormat('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
   const date = new Intl.DateTimeFormat('en-IN', { timeZone: tz, day: 'numeric', month: 'short' });
   return (
-    <div className="stack notif-page" style={{ gap: 18 }}>
+    <div className="pg notif-page">
       <div className="ph">
         <div>
+          <span className="eyebrow">{unread > 0 ? `${unread} unread` : 'Activity'}</span>
           <h1>Notifications</h1>
           <p className="sub">Interest taps, drafts ready for review, sends and automation problems. Interest taps are also emailed to your alert address.</p>
         </div>
         {unread > 0 ? (
           <form action={markAllRead} className="row">
-            <span className="pill info"><span className="dot" />{unread} unread</span>
             <Submit className="btn" pending="Marking…"><Icon name="check" size={15} strokeWidth={2.2} />Mark all read</Submit>
           </form>
         ) : rows.length > 0 && <span className="pill ok"><Icon name="check" size={13} strokeWidth={2.4} />All caught up</span>}
@@ -51,11 +51,11 @@ export default async function Notifications() {
                 <KindIcon kind={n.kind} title={n.title} size={36} />
                 <div className="nbody">
                   {n.link ? <Link href={n.link} className="ntitle">{title}</Link> : <span className="ntitle">{title}</span>}
-                  {n.body && <div className="nsub">{n.body}</div>}
+                  {n.body && <div className="nsub">{typo(n.body)}</div>}
                 </div>
-                <time dateTime={n.created_at} title={new Date(n.created_at).toLocaleString('en-IN', { timeZone: tz })}>
-                  {g.label === 'Earlier' ? date.format(new Date(n.created_at)) : g.label === 'Today' && Date.now() - +new Date(n.created_at) < 3600_000 ? ago(n.created_at) : time.format(new Date(n.created_at))}
-                </time>
+                {g.label === 'Today' && Date.now() - +new Date(n.created_at) < 3600_000
+                  ? <Ago iso={n.created_at} title={`${date.format(new Date(n.created_at))}, ${fmtTime(n.created_at, tz)}`} />
+                  : <time dateTime={n.created_at} title={`${date.format(new Date(n.created_at))}, ${fmtTime(n.created_at, tz)}`}>{g.label === 'Earlier' ? date.format(new Date(n.created_at)) : fmtTime(n.created_at, tz)}</time>}
                 {!n.read_at && <span className="unread-dot"><span className="sr">Unread</span></span>}
               </li>
             );

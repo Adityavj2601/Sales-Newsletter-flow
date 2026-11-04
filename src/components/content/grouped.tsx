@@ -1,5 +1,4 @@
 /* Inset grouped lists (iOS Settings / macOS System Settings). Server-safe. */
-import { Icon } from './icons';
 
 export function Group({ title, footer, children, className = '', id }: { title?: React.ReactNode; footer?: React.ReactNode; children: React.ReactNode; className?: string; id?: string }) {
   return (
@@ -25,6 +24,8 @@ export function Row({ label, sub, children, as = 'label', stack, className = '',
   );
 }
 
-export function Callout({ icon = 'info', tone = 'info', children }: { icon?: string; tone?: 'info' | 'warn' | 'ok' | 'bad'; children: React.ReactNode }) {
-  return <div className={`cx-callout ${tone}`}><span className="cx-callout-i"><Icon name={icon} size={18} /></span><div>{children}</div></div>;
+const GLYPH = { info: 'i', warn: '!', ok: '✓', bad: '!' } as const;
+/** The app's one banner: globals .notice with a leading status glyph. */
+export function Callout({ tone = 'info', children }: { icon?: string; tone?: 'info' | 'warn' | 'ok' | 'bad'; children: React.ReactNode }) {
+  return <div className={`notice${tone === 'info' ? '' : ` ${tone}`}`}><span className="ni" aria-hidden>{GLYPH[tone]}</span><div>{children}</div></div>;
 }
