@@ -27,7 +27,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     (
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: v.ink, color: fg, padding: '64px 72px', fontFamily: 'serif' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 26, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.85 }}>
-          <span style={{ color: v.acc }}>{clean(p.newsletter_name)}</span><span>#{String(e.number).padStart(2, '0')}</span>
+          <span style={{ color: v.acc }}>{clean(p.newsletter_name)}</span><span>#{e.number}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {e.content.kicker ? <div style={{ fontSize: 28, color: v.acc, textTransform: 'uppercase', letterSpacing: 3 }}>{clean(e.content.kicker)}</div> : null}

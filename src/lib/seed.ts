@@ -47,7 +47,7 @@ const S = {
   mrera_rb: { url: 'https://www.realtybuzz.in/maharera-tightens-rules-on-display-standards-in-real-estate-ads', title: 'MahaRERA tightens rules on display standards in real estate ads', publisher: 'RealtyBuzz' },
   mrera_asci: { url: 'https://www.freepressjournal.in/amp/mumbai/maharashtra-maharera-partners-with-asci-to-spot-non-compliant-real-estate-developers', title: 'MahaRERA partners with ASCI to spot non-compliant developers', publisher: 'Free Press Journal' },
   gujrera: { url: 'https://propnewstime.com/getdetailsStories/MTg3NzU=/developers-face-penalties-for-non-compliant-ads-under-gujarat-rera-rules', title: 'Developers face penalties for non-compliant ads under Gujarat RERA rules', publisher: 'PropNewsTime' },
-  cbre_bt: { url: 'https://www.businesstoday.in/personal-finance/real-estate/story/bigger-homes-bigger-budgets-high-end-housing-dominates-indias-2025-sales-finds-cbre-report-511528-2026-01-19', title: "Bigger homes, bigger budgets: high-end housing dominates India's 2025 sales, finds CBRE", publisher: 'Business Today' },
+  cbre_bt: { url: 'https://www.businesstoday.in/personal-finance/real-estate/story/bigger-homes-bigger-budgets-high-end-housing-dominates-indias-2025-sales-finds-cbre-report-511528-2026-01-19', title: "Bigger homes, bigger budgets: high-end housing dominates India’s 2025 sales, finds CBRE", publisher: 'Business Today' },
 };
 type K = keyof typeof S;
 const srcs = (...k: K[]) => k.map((id) => ({ id, ...S[id] }));
@@ -56,23 +56,23 @@ const cta = { type: 'cta', heading: 'Curious?', body: 'One tap is enough. Nobody
 function monthOne(): any[] {
   return [
     {
-      kicker: 'Q3 in numbers', title: 'Q3 launched more homes than it sold', dek: "Anarock's Q3 numbers, read for the people who have to fill the site-visit calendar.",
+      kicker: 'Q3 in numbers', title: 'Q3 launched more homes than it sold', dek: "Anarock’s Q3 numbers, read for the people who have to fill the site-visit calendar.",
       subject: '{first_name}, Q3 launched more homes than it sold (3-min read)', preheader: 'What 18% more launches means for your site-visit calendar.',
       waText: 'Hi {first_name} 👋\nQ3 numbers are out: 18% more launches, only 3% more sales.\nHere’s what that means for your next launch, in 3 minutes:\n👉 {link}',
       preview: { title: 'Q3 launched more homes than it sold', description: '18% more launches, 3% more sales. What it means for your next launch.' },
       sources: srcs('anarock_bs', 'anarock_cw'), pillars: ['feature', 'delivered'],
       blocks: [
-        { type: 'tldr', bullets: ["Sales in India's top 7 cities rose 3% year on year to about 1,00,220 homes (Anarock).", 'Launches grew much faster, up 18% to about 1,14,320 homes. Unsold inventory rose 12% to about 6.31 lakh.', 'Average prices are up 7%. Buyers have more choice and less urgency, so every site visit is harder to win.'] },
+        { type: 'tldr', bullets: ["Sales in India’s top 7 cities rose 3% year on year to about 1,00,220 homes (Anarock).", 'Launches grew much faster, up 18% to about 1,14,320 homes. Unsold inventory rose 12% to about 6.31 lakh.', 'Average prices are up 7%. Buyers have more choice and less urgency, so every site visit is harder to win.'] },
         { type: 'stat', value: '1.14 lakh', caption: 'homes launched in Q3 2026 across the top 7 cities, against about 1.00 lakh sold', sourceIds: ['anarock_bs'] },
         { type: 'story', headline: 'Supply is outrunning demand', body: 'Developers launched about 1,14,320 homes between July and September, 18% more than a year earlier. Sales grew 3%, to about 1,00,220. Unsold stock across the seven cities now stands at around 6.31 lakh homes, up 12%.', why: 'When more projects chase the same buyer, each site visit costs more to win. The teams that come out ahead respond first and follow up best. Ad spend alone won’t do it.', sourceIds: ['anarock_bs', 'anarock_cw'] },
         { type: 'chart', kind: 'bar', title: 'Q3 2026 vs Q3 2025, top 7 cities (year-on-year change)', insight: 'Launches grew six times faster than sales.', unit: '%', data: [{ label: 'New launches', value: 18 }, { label: 'Unsold inventory', value: 12 }, { label: 'Average price', value: 7 }, { label: 'Homes sold', value: 3 }, { label: 'Sales value', value: 2 }], sourceIds: ['anarock_bs', 'anarock_cw'] },
         { type: 'story', headline: 'MMR and Bengaluru are half the market', body: 'MMR sold about 31,750 homes and Bengaluru about 16,670, together 48% of all sales in the top 7 cities. Hyderabad grew fastest, up 15% to about 12,950 homes.', why: 'If you sell outside these two cities, national headlines can mislead you. Track absorption in your own micro-market, not the top-7 average.', sourceIds: ['anarock_cw'] },
-        { type: 'poll', question: 'Are you launching a new project in the next 6 months?', options: ["Yes, it's planned", 'Considering it', 'Not this year'] },
+        { type: 'poll', question: 'Are you launching a new project in the next 6 months?', options: ["Yes, it’s planned", 'Considering it', 'Not this year'] },
         cta,
       ],
     },
     {
-      kicker: 'The rate hike', title: 'The first rate hike since 2023 reaches your buyers', dek: 'What a 0.25% move does to a home loan, and how sales teams can answer "let’s wait and see".',
+      kicker: 'The rate hike', title: 'The first rate hike since 2023 reaches your buyers', dek: 'What a 0.25% move does to a home loan, and how sales teams can answer “let’s wait and see”.',
       subject: '{first_name}, what the rate hike really does to an EMI', preheader: 'A 0.25% move, in rupees per month.',
       waText: 'Hi {first_name} 👋\nThe RBI’s first rate hike since 2023 is reaching home-loan EMIs.\nWe worked out what it means in rupees per month. It’s smaller than most buyers think:\n👉 {link}',
       preview: { title: 'What the rate hike really does to an EMI', description: 'A 0.25% move in rupees per month, and how to answer “let’s wait and see”.' },
@@ -80,7 +80,7 @@ function monthOne(): any[] {
       blocks: [
         { type: 'tldr', bullets: ['The RBI raised the repo rate from 5.25% to 5.50% on 7 October, its first hike since February 2023.', 'Repo-linked home loans reset at least once every three months, so many buyers will see a higher EMI soon.', 'Knight Frank expects festive sales to beat 2025 but grow more slowly, and says developers may need payment plans and incentives.'] },
         { type: 'stat', value: '5.50%', caption: 'RBI repo rate after the 7 October 2026 hike, up from 5.25%', sourceIds: ['rbi_bt', 'rbi_cc'] },
-        { type: 'story', headline: 'What changed', body: 'The RBI lifted the repo rate by 25 basis points on 7 October. Repo-linked home loans pass this on at their next reset, which must happen at least once every three months. Fixed-rate loans are unaffected for now.', why: 'Your sales team will hear "let’s wait and see" more often. Have an answer ready: in rupees per month the change is small.', sourceIds: ['rbi_bt', 'rbi_cc'] },
+        { type: 'story', headline: 'What changed', body: 'The RBI lifted the repo rate by 25 basis points on 7 October. Repo-linked home loans pass this on at their next reset, which must happen at least once every three months. Fixed-rate loans are unaffected for now.', why: 'Your sales team will hear “let’s wait and see” more often. Have an answer ready: in rupees per month the change is small.', sourceIds: ['rbi_bt', 'rbi_cc'] },
         { type: 'chart', kind: 'column', title: 'EMI on a ₹75 lakh, 20-year loan', insight: 'Illustrative: if the full 0.25% is passed on, the EMI rises by about ₹1,150 a month.', unit: '₹', data: [{ label: 'At 7.50%', value: 60420 }, { label: 'At 7.75%', value: 61571 }], sourceIds: ['rbi_cc'] },
         { type: 'story', headline: 'Developers are leaning on payment plans', body: 'Knight Frank expects festive-season sales to beat last year but grow more slowly than in past years. Its research director said payment plans and fiscal incentives from developers may be needed to support sales.', why: 'If you’re designing an offer, test it on your warmest leads first. A payment plan your team can explain in one sentence beats a clever one.', sourceIds: ['kf_bs'] },
         { type: 'poll', question: 'Are you changing your payment plans this quarter?', options: ['Yes, already done', 'Considering it', 'No'] },
@@ -111,7 +111,7 @@ function monthOne(): any[] {
       sources: srcs('cbre_bt'), pillars: ['delivered', 'feature'],
       blocks: [
         { type: 'tldr', bullets: ['High-end homes were nearly 27% of residential sales in 2025, the largest segment for the first time (CBRE).', 'Bigger tickets mean fewer, more valuable buyers. A cheap lead that never visits isn’t cheap.', 'Track cost per site visit and cost per booking by campaign.'] },
-        { type: 'stat', value: '27%', caption: "share of India's 2025 residential sales from high-end homes, more than double their 2022 share", sourceIds: ['cbre_bt'] },
+        { type: 'stat', value: '27%', caption: "share of India’s 2025 residential sales from high-end homes, more than double their 2022 share", sourceIds: ['cbre_bt'] },
         { type: 'story', headline: 'The market moved up the price ladder', body: 'CBRE found that high-end homes made up nearly 27% of residential sales in 2025, more than double their 2022 share, making them the largest segment by sales for the first time. It credits rising incomes and steady NRI demand.', why: 'Premium buyers research longer and visit fewer projects. Each enquiry is worth more, so the speed and quality of follow-up matter more than volume.', sourceIds: ['cbre_bt'] },
         { type: 'story', opinion: true, headline: 'Cost per lead flatters the wrong campaigns', body: 'A lead-form campaign can bring in enquiries cheaply and still produce very few site visits. A search campaign can cost several times more per lead and still be cheaper per visit. Ad platforms optimise for whatever event you report to them, so if visits and bookings never flow back, they keep chasing cheap enquiries.', why: 'Ask your agency for one weekly table: spend, leads, site visits and bookings, by campaign. It takes an hour to set up and changes budget decisions.', sourceIds: [] },
         { type: 'text', heading: 'Work out your cost per site visit', body: 'Cost per site visit = cost per lead ÷ share of leads that visit.\n\nExample: a ₹150 lead where 2 in 100 visit costs ₹7,500 per visit. A ₹1,000 lead where 15 in 100 visit costs about ₹6,667 per visit. The "expensive" campaign is cheaper.' },
