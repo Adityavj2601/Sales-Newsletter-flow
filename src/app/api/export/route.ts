@@ -5,7 +5,7 @@ import { all, db, DATA_DIR } from '@/lib/db';
 import { activeProduct } from '@/lib/context';
 import { toCSV } from '@/lib/csv';
 
-export const GET = api(async ({ req }) => {
+export const GET = api(async ({ req, user }) => {
   const u = new URL(req.url);
   const type = u.searchParams.get('type');
   const p = await activeProduct();
@@ -23,6 +23,7 @@ export const GET = api(async ({ req }) => {
     return file('events', toCSV([cols, ...rows.map((r) => cols.map((c) => r[c]))]));
   }
   if (type === 'backup') {
+    if (user.role !== 'admin') return new Response(JSON.stringify({ error: 'Only admins can download the database backup.' }), { status: 403 });
     const out = path.join(DATA_DIR, `backup-${Date.now()}.db`);
     db().exec(`VACUUM INTO '${out.replace(/'/g, "''")}'`);
     const buf = fs.readFileSync(out);

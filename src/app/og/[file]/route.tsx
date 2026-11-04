@@ -1,3 +1,5 @@
+import { imgKey } from '@/lib/crypto';
+import { currentUser } from '@/lib/auth';
 import { ImageResponse } from 'next/og';
 import { getEdition } from '@/lib/editions';
 import { getProduct } from '@/lib/settings';
@@ -7,10 +9,16 @@ export const dynamic = 'force-dynamic';
 const clean = (s: string) => s.replace(/₹/g, 'Rs ').replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
 
 /** 1200×630 link-preview image for WhatsApp, LinkedIn, Slack and email clients. */
-export async function GET(_: Request, { params }: { params: Promise<{ file: string }> }) {
+
+async function visible(e: { id: string; status: string }, req: Request) {
+  if (e.status === 'sent' || e.status === 'sending') return true;
+  if (new URL(req.url).searchParams.get('k') === imgKey(e.id)) return true;
+  return !!(await currentUser());
+}
+export async function GET(req: Request, { params }: { params: Promise<{ file: string }> }) {
   const id = (await params).file.replace(/\.png$/, '');
   const e = getEdition(id);
-  if (!e) return new Response('Not found', { status: 404 });
+  if (!e || !(await visible(e, req))) return new Response('Not found', { status: 404 });
   const p = getProduct(e.product_id)!;
   const v = brandVars(p);
   const fg = onColor(v.ink);

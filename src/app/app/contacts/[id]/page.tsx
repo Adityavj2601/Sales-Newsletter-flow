@@ -45,10 +45,11 @@ export default async function Contact({ params }: { params: Promise<{ id: string
       </div>
       <section className="card"><h2>Details</h2>
         <form action={saveContact} className="form-grid" style={{ marginTop: 10 }}>
-          <ContactFields c={c} />
+          <ContactFields c={c} stage={false} />
           {c.status !== 'active' && <label className="check full"><input type="checkbox" name="resubscribe" /><span>They asked to be resubscribed (only tick with their explicit request)</span></label>}
-          <div className="full row"><Submit>Save</Submit><span className="spacer" /><Confirm action={deleteContact.bind(null, id)} label="Delete contact" /></div>
+          <div className="full row"><Submit>Save</Submit><span className="hint">Change the stage with the buttons at the top.</span></div>
         </form>
+        <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}><Confirm action={deleteContact.bind(null, id)} label="Delete contact" /></div>
       </section>
     </div>
   );

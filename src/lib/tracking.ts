@@ -8,6 +8,8 @@ export const SCORE: Record<string, number> = {
   open: 1, click: 3, view: 5, 'scroll:75': 5, poll: 10, share: 15, more: 15, showcase: 30, book: 40, interested: 50, notnow: -10, unsubscribe: -100, wa_reply: 20,
 };
 export const INTENTS = new Set(['interested', 'book', 'showcase', 'more']);
+/** Strength of an intent, so a weaker later tap never hides a stronger earlier one. */
+export const INTENT_RANK: Record<string, number> = { more: 1, showcase: 2, book: 3, interested: 4 };
 export const HOT_SCORE = 50;
 
 export type Resolved = { delivery: any | null; contact: any | null; editionId: string | null; productId: string | null };
@@ -28,19 +30,38 @@ export function resolveToken(token: string | null | undefined, editionId?: strin
   return { delivery: null, contact: null, editionId: null, productId: null };
 }
 
+/** Link scanners and preview bots (corporate mail gateways pre-fetch every link). Their requests must not count. */
+export function isBot(ua: string | null | undefined): boolean {
+  if (!ua) return true;
+  return /bot\b|crawler|spider|slurp|preview|scanner|proofpoint|mimecast|barracuda|safelinks|urldefense|google-?inspectiontool|facebookexternalhit|whatsapp|linkedinbot|slackbot|twitterbot|skypeuripreview|curl\/|wget\/|python-requests|python-urllib|go-http-client|java\/|okhttp|libwww|httpclient/i.test(ua);
+}
+
 const ALLOWED = new Set(['open', 'click', 'view', 'scroll', 'time', 'poll', 'share', 'interested', 'book', 'more', 'notnow', 'showcase', 'unsubscribe', 'resubscribe', 'note', 'wa_reply']);
+/** Types whose value distinguishes separate "first" occurrences (each scroll milestone, each Our-work card). */
+const PER_VALUE = new Set(['scroll', 'showcase']);
 
 /** Record an event; updates delivery status, lead score, stage and fires alerts for intent. */
 export async function track(opts: { token?: string | null; editionId?: string | null; type: string; value?: string | null; meta?: any }) {
   if (!ALLOWED.has(opts.type)) return null;
   const r = resolveToken(opts.token, opts.editionId);
   if (!r.editionId) return null;
+  if (r.delivery?.channel === 'test') return null; // test sends never count
+  if (opts.type === 'poll' && !opts.value) return null;
   const t = now();
   const scoreKey = opts.type === 'scroll' ? `scroll:${opts.value}` : opts.type;
-  // Only the first occurrence per delivery and type counts for scoring and alerts.
+  // Only the first occurrence per delivery and type (per value for scroll/showcase) counts for scoring and alerts.
   const firstTime = r.delivery
-    ? !get('SELECT id FROM events WHERE delivery_id = ? AND type = ? AND COALESCE(value, \'\') = COALESCE(?, \'\') LIMIT 1', r.delivery.id, opts.type, opts.type === 'scroll' || opts.type === 'showcase' ? opts.value ?? null : null)
+    ? !get(
+        PER_VALUE.has(opts.type)
+          ? "SELECT id FROM events WHERE delivery_id = ? AND type = ? AND COALESCE(value, '') = COALESCE(?, '') LIMIT 1"
+          : 'SELECT id FROM events WHERE delivery_id = ? AND type = ? LIMIT 1',
+        ...(PER_VALUE.has(opts.type) ? [r.delivery.id, opts.type, opts.value ?? null] : [r.delivery.id, opts.type]),
+      )
     : true;
+  // Anonymous (shared-link) intent: alert at most once per edition and action per hour.
+  const anonRecent = !r.delivery && INTENTS.has(opts.type)
+    ? !!get('SELECT id FROM events WHERE edition_id = ? AND delivery_id IS NULL AND type = ? AND created_at >= ? LIMIT 1', r.editionId, opts.type, new Date(Date.now() - 3600_000).toISOString())
+    : false;
   const id = uid('ev_');
   insert('events', { id, product_id: r.productId, edition_id: r.editionId, contact_id: r.contact?.id || null, delivery_id: r.delivery?.id || null, type: opts.type, value: opts.value ?? null, meta: opts.meta ? JSON.stringify(opts.meta).slice(0, 2000) : null, created_at: t });
 
@@ -49,15 +70,19 @@ export async function track(opts: { token?: string | null; editionId?: string | 
     const next = opts.type === 'open' ? 'opened' : ['click', 'view', 'scroll', 'poll', 'interested', 'book', 'more', 'showcase', 'share'].includes(opts.type) ? 'clicked' : null;
     if (next && (rank[next] ?? 0) > (rank[r.delivery.status] ?? 0)) update('deliveries', r.delivery.id, { status: next });
   }
-  if (r.contact && firstTime) {
-    const pts = SCORE[scoreKey] ?? 0;
+  if (r.contact) {
     const patch: any = { last_engaged_at: t };
-    if (pts) patch.score = Math.max(0, (r.contact.score || 0) + pts);
-    if (INTENTS.has(opts.type)) {
-      patch.last_intent = opts.type;
-      patch.last_intent_at = t;
-      if (r.contact.stage === 'new') patch.stage = 'warm';
+    if (firstTime) {
+      const pts = SCORE[scoreKey] ?? 0;
+      if (pts) patch.score = Math.max(0, (r.contact.score || 0) + pts);
+      if (INTENTS.has(opts.type)) {
+        const cur = INTENT_RANK[r.contact.last_intent] || 0;
+        // Keep the strongest intent; refresh its time when the same or stronger.
+        if ((INTENT_RANK[opts.type] || 0) >= cur) Object.assign(patch, { last_intent: opts.type, last_intent_at: t });
+        if (r.contact.stage === 'new') patch.stage = 'warm';
+      }
     }
+    // Preference changes always apply, however often they're requested.
     if (opts.type === 'notnow') patch.frequency = 'less';
     if (opts.type === 'unsubscribe') {
       // WhatsApp "STOP" only ends WhatsApp; the email footer link ends everything.
@@ -66,7 +91,7 @@ export async function track(opts: { token?: string | null; editionId?: string | 
     }
     update('contacts', r.contact.id, patch);
   }
-  if (INTENTS.has(opts.type) && firstTime && opts.type !== 'more') {
+  if (INTENTS.has(opts.type) && firstTime && !anonRecent && opts.type !== 'more') {
     const e = getEdition(r.editionId);
     let extra = '';
     if (opts.type === 'showcase' && opts.value) {
@@ -79,14 +104,20 @@ export async function track(opts: { token?: string | null; editionId?: string | 
   return { id, ...r };
 }
 
-export function addNote(eventId: string, token: string, note: string) {
+/** Save a reader's note on their intent event, then forward it to the sales team. */
+export async function addNote(eventId: string, token: string, note: string): Promise<boolean> {
   const ev = get('SELECT * FROM events WHERE id = ?', eventId);
   const d = get('SELECT id FROM deliveries WHERE token = ?', token);
-  if (!ev || (ev.delivery_id && ev.delivery_id !== d?.id)) return false;
-  run('UPDATE events SET meta = ? WHERE id = ?', JSON.stringify({ ...(ev.meta ? JSON.parse(ev.meta) : {}), note: note.slice(0, 1000) }), eventId);
+  if (!ev || !d || ev.delivery_id !== d.id) return false;
+  const text = note.trim().slice(0, 1000);
+  if (!text) return false;
+  run('UPDATE events SET meta = ? WHERE id = ?', JSON.stringify({ ...(ev.meta ? JSON.parse(ev.meta) : {}), note: text }), eventId);
+  let contact: any = null;
   if (ev.contact_id) {
-    const c = get('SELECT notes FROM contacts WHERE id = ?', ev.contact_id);
-    update('contacts', ev.contact_id, { notes: `${c?.notes ? c.notes + '\n' : ''}[${new Date().toISOString().slice(0, 10)}] Reader note: ${note.slice(0, 1000)}` });
+    contact = get('SELECT * FROM contacts WHERE id = ?', ev.contact_id);
+    update('contacts', ev.contact_id, { notes: `${contact?.notes ? contact.notes + '\n' : ''}[${new Date().toISOString().slice(0, 10)}] Reader note: ${text}` });
   }
+  const e = getEdition(ev.edition_id);
+  await alertIntent({ productId: ev.product_id, action: 'note', label: 'Left a note', contact, editionTitle: e?.content.title || '', editionId: ev.edition_id, note: text });
   return true;
 }

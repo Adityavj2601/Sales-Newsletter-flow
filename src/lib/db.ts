@@ -113,6 +113,10 @@ function open(): DB {
   if (!mod) throw new Error('This app needs Node.js 22.13 or newer (built-in SQLite).');
   const db: DB = new mod.DatabaseSync(path.join(DATA_DIR, 'app.db'));
   db.exec(SCHEMA);
+  // Additive migrations for databases created by earlier versions.
+  for (const sql of ['ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0', 'ALTER TABLE deliveries ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0']) {
+    try { db.exec(sql); } catch { /* column already exists */ }
+  }
   return db;
 }
 

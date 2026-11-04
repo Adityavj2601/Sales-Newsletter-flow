@@ -14,12 +14,12 @@ async function setup(fd: FormData) {
   const name = String(fd.get('name') || '').trim();
   const email = String(fd.get('email') || '').trim().toLowerCase();
   const pw = String(fd.get('password') || '');
-  if (!name || !email || pw.length < 8) redirect('/setup?e=1');
+  if (!name || !/^[^@\s"'<>]+@[^@\s"'<>]+\.[a-z]{2,}$/i.test(email) || pw.length < 8) redirect('/setup?e=1');
   const id = uid('u_');
   insert('users', { id, email, name, pass_hash: hashPassword(pw), role: 'admin', created_at: now() });
   const base = String(fd.get('base') || '').trim().replace(/\/+$/, '');
   const g = getSetting('general');
-  if (base) setSetting('general', { ...g, publicBaseUrl: base });
+  if (base && /^https?:\/\/[^\s"'<>]+$/i.test(base)) setSetting('general', { ...g, publicBaseUrl: base });
   setSetting('alerts', { ...getSetting('alerts'), alertEmails: email });
   seedProducts();
   await createSession(id);

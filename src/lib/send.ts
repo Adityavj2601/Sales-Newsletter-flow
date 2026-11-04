@@ -1,3 +1,4 @@
+import { imgKey } from './crypto';
 import { all, get, insert, update, uid, now, token, run, parse } from './db';
 import { getEdition, type Edition } from './editions';
 import { getProduct, getSetting, baseUrl, waReady, waToken, type Product } from './settings';
@@ -28,7 +29,7 @@ export function audienceFor(e: Edition, channel: 'email' | 'whatsapp' | 'wa_manu
   // "Less often": skip if they received the previous edition.
   const prev = get("SELECT id FROM editions WHERE product_id = ? AND number < ? AND status = 'sent' ORDER BY number DESC LIMIT 1", e.product_id, e.number);
   if (prev) {
-    const gotPrev = new Set(all('SELECT contact_id FROM deliveries WHERE edition_id = ? AND status <> \'failed\'', prev.id).map((r) => r.contact_id));
+    const gotPrev = new Set(all("SELECT contact_id FROM deliveries WHERE edition_id = ? AND status NOT IN ('failed','queued','skipped')", prev.id).map((r) => r.contact_id));
     rows = rows.filter((r) => r.frequency !== 'less' || !gotPrev.has(r.id));
   }
   return rows;
@@ -54,12 +55,15 @@ export function queueEdition(editionId: string, cfg: SendConfig) {
     if (ch === 'whatsapp' && !waReady()) continue;
     for (const c of audienceFor(e, ch, cfg.audience)) {
       if (existingDelivery(e.id, c.id, ch)) continue;
+      if (ch === 'whatsapp' && get("SELECT id FROM deliveries WHERE edition_id = ? AND contact_id = ? AND channel = 'wa_manual' AND status <> 'queued'", e.id, c.id)) continue;
       newDelivery(e.id, c.id, ch, 'queued', now());
       queued++;
     }
   }
-  update('editions', e.id, { status: 'sending', send_config: JSON.stringify(cfg), scheduled_at: e.scheduled_at || now() });
-  notify(e.product_id, 'send', `Sending edition #${e.number}`, `${queued} messages queued. They go out at the pace set in Settings.`, `/app/editions/${e.id}/distribute`);
+  if (!queued) return 0;
+  // A top-up send to new or remaining people keeps a sent edition "sent" (its date and rotation stay as they were).
+  if (e.status !== 'sent') update('editions', e.id, { status: 'sending', send_config: JSON.stringify(cfg), scheduled_at: e.scheduled_at || now() });
+  notify(e.product_id, 'send', e.status === 'sent' ? `Top-up send for edition #${e.number}` : `Sending edition #${e.number}`, `${queued} messages queued. They go out at the pace set in Settings.`, `/app/editions/${e.id}/distribute`);
   return queued;
 }
 
@@ -72,7 +76,8 @@ export function scheduleEdition(editionId: string, at: string, cfg: SendConfig) 
   update('editions', e.id, { status: 'scheduled', scheduled_at: at, send_config: JSON.stringify(cfg) });
 }
 export function unscheduleEdition(editionId: string) {
-  update('editions', editionId, { status: 'approved', scheduled_at: null });
+  const r = run("UPDATE editions SET status = 'approved', scheduled_at = NULL WHERE id = ? AND status = 'scheduled'", editionId);
+  if (!r.changes) throw new Error('This edition isn’t scheduled any more (it may already be sending).');
 }
 
 /** Called every minute: start due scheduled editions. */
@@ -109,7 +114,7 @@ export async function sendOneEmail(d: any) {
   const p = getProduct(e.product_id)!;
   const c = get('SELECT * FROM contacts WHERE id = ?', d.contact_id);
   if (!c || c.status !== 'active' || !c.email_consent) {
-    update('deliveries', d.id, { status: 'failed', error: 'Contact unsubscribed or lost consent before sending' });
+    update('deliveries', d.id, { status: 'skipped', error: 'Unsubscribed or withdrew consent before sending' });
     return;
   }
   const base = baseUrl();
@@ -122,7 +127,7 @@ export async function sendOneEmail(d: any) {
     });
     update('deliveries', d.id, { status: 'sent', sent_at: now(), provider_id: res.id, error: res.outbox ? 'Stored in Outbox (SMTP not configured)' : null });
   } catch (err: any) {
-    update('deliveries', d.id, { status: 'failed', error: String(err?.message || err).slice(0, 300) });
+    failOrRetry(d, err);
   }
 }
 
@@ -130,10 +135,10 @@ export async function sendTestEmail(editionId: string, to: string) {
   const e = getEdition(editionId);
   if (!e) throw new Error('Edition not found');
   const p = getProduct(e.product_id)!;
-  const d = newDelivery(e.id, null, 'test', 'sent');
+  const d = newDelivery(e.id, null, 'test', 'queued');
   const base = baseUrl();
-  const res = await sendMail({ to, kind: 'test', from: fromFor(p), subject: `[TEST] ${personalize(e.content.subject, { first_name: 'Test' })}`, html: renderEmail(e, p, { token: d.token, firstName: 'Test' }, { base }), text: renderEmailText(e, p, { token: d.token }, base), headers: emailHeaders(p, d, base) });
-  update('deliveries', d.id, { sent_at: now(), provider_id: res.id });
+  const res = await sendMail({ to, kind: 'test', from: fromFor(p), replyTo: p.brand.replyTo || undefined, subject: `[TEST] ${personalize(e.content.subject, { first_name: 'Test' })}`, html: renderEmail(e, p, { token: d.token, firstName: 'Test' }, { base }), text: renderEmailText(e, p, { token: d.token }, base), headers: emailHeaders(p, d, base) });
+  update('deliveries', d.id, { status: 'sent', sent_at: now(), provider_id: res.id });
   return res;
 }
 
@@ -147,14 +152,17 @@ export function personalLink(e: Edition, p: Product, tok: string) {
 export function manualWhatsApp(editionId: string, contactId: string) {
   const e = getEdition(editionId)!;
   const p = getProduct(e.product_id)!;
-  const c = get('SELECT * FROM contacts WHERE id = ?', contactId);
+  const why = canSend(e);
+  if (why) throw new Error(why);
+  const c = get('SELECT * FROM contacts WHERE id = ? AND product_id = ?', contactId, e.product_id);
   if (!c?.phone) throw new Error('This contact has no phone number.');
+  if (c.status !== 'active' || !c.wa_consent) throw new Error('This contact hasn’t agreed to WhatsApp messages.');
   const d = existingDelivery(e.id, c.id, 'wa_manual') || newDelivery(e.id, c.id, 'wa_manual', 'queued');
   const text = renderWhatsApp(e, p, personalLink(e, p, d.token), c.first_name);
   return { delivery: d, text, url: `https://wa.me/${String(c.phone).replace(/\D/g, '')}?text=${encodeURIComponent(text)}` };
 }
-export function markManualSent(deliveryId: string) {
-  run("UPDATE deliveries SET status = CASE WHEN status IN ('queued','failed') THEN 'sent' ELSE status END, sent_at = COALESCE(sent_at, ?) WHERE id = ?", now(), deliveryId);
+export function markManualSent(editionId: string, deliveryId: string) {
+  run("UPDATE deliveries SET status = CASE WHEN status IN ('queued','failed') THEN 'sent' ELSE status END, sent_at = COALESCE(sent_at, ?) WHERE id = ? AND edition_id = ? AND channel = 'wa_manual'", now(), deliveryId, editionId);
 }
 
 async function waApi(path: string, body: any) {
@@ -169,12 +177,12 @@ export async function sendOneWhatsApp(d: any) {
   const e = getEdition(d.edition_id)!;
   const p = getProduct(e.product_id)!;
   const c = get('SELECT * FROM contacts WHERE id = ?', d.contact_id);
-  if (!c || c.status !== 'active' || !c.wa_consent) { update('deliveries', d.id, { status: 'failed', error: 'No WhatsApp consent' }); return; }
+  if (!c || c.status !== 'active' || !c.wa_consent) { update('deliveries', d.id, { status: 'skipped', error: 'No WhatsApp consent' }); return; }
   const w = getSetting('whatsapp');
   const base = baseUrl();
   const vars: Record<string, string> = { first_name: c.first_name || 'there', title: e.content.title, dek: e.content.dek, link: personalLink(e, p, d.token), newsletter: p.newsletter_name };
   const components: any[] = [];
-  if (w.headerImage) components.push({ type: 'header', parameters: [{ type: 'image', image: { link: `${base}/og/${e.id}.png` } }] });
+  if (w.headerImage) components.push({ type: 'header', parameters: [{ type: 'image', image: { link: `${base}/og/${e.id}.png?k=${imgKey(e.id)}` } }] });
   const params = w.bodyParams.split(',').map((s) => s.trim()).filter(Boolean);
   if (params.length) components.push({ type: 'body', parameters: params.map((k) => ({ type: 'text', text: (vars[k] ?? k).slice(0, 900) })) });
   if (w.button === 'url') components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: `${p.slug}/${e.slug}?r=${d.token}` }] });
@@ -186,13 +194,14 @@ export async function sendOneWhatsApp(d: any) {
     const j = await waApi(`${w.phoneNumberId}/messages`, { messaging_product: 'whatsapp', to: String(c.phone).replace(/\D/g, ''), type: 'template', template: { name: w.templateName, language: { code: w.templateLang || 'en' }, components } });
     update('deliveries', d.id, { status: 'sent', sent_at: now(), provider_id: j?.messages?.[0]?.id || null });
   } catch (err: any) {
-    update('deliveries', d.id, { status: 'failed', error: String(err?.message || err).slice(0, 300) });
+    failOrRetry(d, err);
   }
 }
 
 export async function testWhatsApp(to: string) {
   const w = getSetting('whatsapp');
   if (!waReady()) throw new Error('Fill in phone number ID, access token and template name first.');
+  if (to.replace(/\D/g, '').length < 10) throw new Error('Enter the phone number with country code, e.g. +91 98xxxxxxxx.');
   // hello_world is Meta's default sample template; it works on new accounts without approval.
   await waApi(`${w.phoneNumberId}/messages`, { messaging_product: 'whatsapp', to: to.replace(/\D/g, ''), type: 'template', template: { name: 'hello_world', language: { code: 'en_US' } } });
   return 'Sent Meta’s "hello_world" test template. Check the phone.';
@@ -201,18 +210,25 @@ export async function testWhatsApp(to: string) {
 /** Worker: send queued deliveries at the configured pace, then close finished editions. */
 export async function processQueue(log: (s: string) => void) {
   const perMin = Math.max(1, getSetting('general').emailsPerMinute || 30);
-  const batch = all("SELECT * FROM deliveries WHERE status = 'queued' AND channel IN ('email','whatsapp') AND (send_after IS NULL OR send_after <= ?) ORDER BY created_at LIMIT ?", now(), perMin);
+  // Pace across every trigger (built-in timer, /api/cron, Send now): count what already went out in the last minute.
+  const recent = Number(get("SELECT COUNT(*) AS n FROM deliveries WHERE channel IN ('email','whatsapp') AND sent_at >= ?", new Date(Date.now() - 60_000).toISOString())?.n || 0);
+  const room = perMin - recent;
+  const batch = room > 0 ? all("SELECT * FROM deliveries WHERE status = 'queued' AND channel IN ('email','whatsapp') AND (send_after IS NULL OR send_after <= ?) ORDER BY created_at LIMIT ?", now(), room) : [];
   for (const d of batch) {
     if (d.channel === 'email') await sendOneEmail(d);
     else await sendOneWhatsApp(d);
   }
-  if (batch.length) log(`Sent ${batch.length} queued message(s)`);
+  if (batch.length) {
+    const ids = batch.map((d) => d.id);
+    const r = get(`SELECT SUM(status = 'sent') AS ok, SUM(status = 'queued') AS retry, SUM(status IN ('failed','skipped')) AS bad FROM deliveries WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids);
+    log(`Processed ${batch.length}: ${r?.ok || 0} sent${r?.retry ? `, ${r.retry} will retry` : ''}${r?.bad ? `, ${r.bad} failed or skipped` : ''}`);
+  }
   for (const e of all("SELECT id, product_id, number FROM editions WHERE status = 'sending'")) {
     const left = get("SELECT COUNT(*) AS n FROM deliveries WHERE edition_id = ? AND status = 'queued' AND channel IN ('email','whatsapp')", e.id)?.n || 0;
     if (!left) {
       update('editions', e.id, { status: 'sent', sent_at: now() });
       markFeatured(e.id);
-      const s = get("SELECT SUM(status <> 'failed') AS ok, SUM(status = 'failed') AS bad FROM deliveries WHERE edition_id = ? AND channel IN ('email','whatsapp')", e.id);
+      const s = get("SELECT SUM(status NOT IN ('failed','skipped')) AS ok, SUM(status = 'failed') AS bad FROM deliveries WHERE edition_id = ? AND channel IN ('email','whatsapp')", e.id);
       notify(e.product_id, 'send', `Edition #${e.number} sent`, `${s?.ok || 0} delivered${s?.bad ? `, ${s.bad} failed` : ''}.`, `/app/editions/${e.id}/analytics`);
       log(`Edition ${e.id} finished`);
     }
@@ -221,8 +237,23 @@ export async function processQueue(log: (s: string) => void) {
 
 /** Mark an edition as sent without the email queue (e.g. WhatsApp-only, copied link). */
 export function markSent(editionId: string) {
-  update('editions', editionId, { status: 'sent', sent_at: now() });
+  const r = run("UPDATE editions SET status = 'sent', sent_at = ? WHERE id = ? AND status IN ('approved','scheduled')", now(), editionId);
+  if (!r.changes) throw new Error('Only an approved edition can be marked as sent.');
   markFeatured(editionId);
+}
+
+/** Temporary problems (server down, rate limits) are retried with back-off; permanent ones fail. */
+const TRANSIENT = /ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket|timeout|fetch failed|\b4(21|50|51|52)\b|rate limit|too many|try again|HTTP 5\d\d|^5\d\d/i;
+function failOrRetry(d: any, err: any) {
+  const msg = String(err?.message || err).slice(0, 300);
+  const attempts = (d.attempts || 0) + 1;
+  if (TRANSIENT.test(msg) && attempts < 5) update('deliveries', d.id, { status: 'queued', attempts, error: `Retry ${attempts}/4: ${msg}`, send_after: new Date(Date.now() + attempts * 5 * 60_000).toISOString() });
+  else update('deliveries', d.id, { status: 'failed', attempts, error: msg });
+}
+
+/** Put failed deliveries of an edition back in the queue ("Retry failed"). */
+export function retryFailed(editionId: string) {
+  return run("UPDATE deliveries SET status = 'queued', attempts = 0, send_after = ?, error = NULL WHERE edition_id = ? AND status = 'failed' AND channel IN ('email','whatsapp')", now(), editionId).changes;
 }
 
 /** Rotation bookkeeping: count how often each "Our work" item has been featured. */

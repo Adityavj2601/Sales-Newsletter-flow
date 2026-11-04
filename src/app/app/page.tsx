@@ -5,6 +5,7 @@ import { getSetting, smtpReady, waReady, baseUrl } from '@/lib/settings';
 import { configuredProviders } from '@/lib/ai/providers';
 import { listEditions } from '@/lib/editions';
 import { fmtDay, ago, num } from '@/lib/format';
+import { editionMetrics } from '@/lib/metrics';
 import { StatusPill } from '@/components/bits';
 import { JOB_INFO } from '@/lib/jobs';
 
@@ -29,18 +30,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
     { done: kbActive >= 3, label: `Add at least 3 “Our work” items (${kbActive} so far)`, href: '/app/knowledge' },
     { done: stories > 0, label: 'Fetch this week’s news into the story pool', href: '/app/stories' },
     { done: contacts > 0, label: 'Import contacts who agreed to hear from you', href: '/app/contacts' },
-    { done: !!getSetting('general').publicBaseUrl, label: 'Set the public web address used in links', href: '/app/settings?tab=general' },
+    { done: !!(getSetting('general').publicBaseUrl || process.env.PUBLIC_BASE_URL), label: 'Set the public web address used in links', href: '/app/settings?tab=general' },
     { done: smtpReady(), label: 'Connect email sending (SMTP). Until then, emails land in the Outbox', href: '/app/settings?tab=email' },
     { done: !!p.brand.address, label: 'Add your registered address (shown in every email footer)', href: '/app/settings?tab=products' },
   ];
   const doneCount = steps.filter((s) => s.done).length;
 
   const last4 = eds.filter((e) => e.status === 'sent').slice(0, 4).map((e) => e.id);
-  const q = last4.map(() => '?').join(',') || "''";
-  const sent = n(`SELECT COUNT(*) AS n FROM deliveries WHERE edition_id IN (${q}) AND channel <> 'test' AND status NOT IN ('failed','queued')`, ...last4);
-  const views = n(`SELECT COUNT(DISTINCT COALESCE(delivery_id, id)) AS n FROM events WHERE edition_id IN (${q}) AND type = 'view'`, ...last4);
-  const intents = n(`SELECT COUNT(*) AS n FROM events WHERE edition_id IN (${q}) AND type IN ('interested','book','showcase')`, ...last4);
-  const unsubs = n(`SELECT COUNT(*) AS n FROM events WHERE edition_id IN (${q}) AND type = 'unsubscribe'`, ...last4);
+  const m = editionMetrics(last4);
+  const sent = m.delivered, views = m.readers, intents = m.intentPeople, unsubs = m.unsubscribes;
   const hot = all("SELECT * FROM contacts WHERE product_id = ? AND status = 'active' AND score > 0 ORDER BY (last_intent_at IS NOT NULL) DESC, last_intent_at DESC, score DESC LIMIT 6", p.id);
   const notes = all('SELECT * FROM notifications WHERE product_id = ? OR product_id IS NULL ORDER BY created_at DESC LIMIT 6', p.id);
   const jobs = all('SELECT * FROM jobs WHERE product_id = ? AND enabled = 1 ORDER BY next_run_at LIMIT 4', p.id);
@@ -103,7 +101,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
             <div className="grid2">
               <div className="kpi"><div className="v">{num(sent)}</div><div className="k">Delivered</div></div>
               <div className="kpi"><div className="v">{num(views)}</div><div className="k">Opened the page</div><div className="d">{sent ? Math.round((views / sent) * 100) : 0}% of delivered</div></div>
-              <div className="kpi"><div className="v">{num(intents)}</div><div className="k">Interest taps</div></div>
+              <div className="kpi"><div className="v">{num(intents)}</div><div className="k">People who showed interest</div></div>
               <div className="kpi"><div className="v">{num(unsubs)}</div><div className="k">Unsubscribes</div></div>
             </div>
           ) : <div className="empty"><b>Nothing sent yet</b><span>Numbers appear here after your first send.</span></div>}

@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { BLOCK_LABELS, CTA_LABELS, MATURITY, PILLARS, newBlock, type Block, type BlockType, type EditionContent, type CheckResult, type ChecksRun, type Source, type CtaAction, type Maturity, type Pillar } from '@/lib/types';
 import { Confirm } from '@/components/ui';
 
@@ -72,6 +73,14 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   const locked = status === 'sent' || status === 'sending';
   const first = useRef(true);
   const dirtyPlanned = useRef(false);
+  const router = useRouter();
+  const latest = useRef(c);
+  latest.current = c;
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const [checkedAt, setCheckedAt] = useState(edition.checks?.at || '');
+  const [editedAt, setEditedAt] = useState(edition.updated_at);
+  const stale = !!checks && editedAt > checkedAt;
 
   /* ---------- autosave ---------- */
   const doSave = useCallback(async (content: EditionContent, opts: { version?: boolean; note?: string } = {}) => {
@@ -81,6 +90,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       dirtyPlanned.current = false;
+      if (j.updated_at) setEditedAt(j.updated_at);
       if (j.status !== status) {
         if ((status === 'approved' || status === 'scheduled') && j.status === 'review') setNote({ kind: 'warn', text: 'You changed an approved edition, so it went back to review. Run checks and approve again.' });
         setStatus(j.status);
@@ -98,6 +108,16 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     const t = setTimeout(() => doSave(c), 1200);
     return () => clearTimeout(t);
   }, [c, planned]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Never lose the last keystrokes: flush pending changes when leaving the editor inside the app.
+  useEffect(() => () => {
+    if ((saveRef.current === 'dirty' || saveRef.current === 'saving') && !locked) {
+      fetch(`/api/editions/${edition.id}`, { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: latest.current }) }).catch(() => null);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function go(href: string) {
+    if (!locked && saveRef.current !== 'saved') await doSave(latest.current);
+    router.push(href);
+  }
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => { if (save === 'dirty' || save === 'saving') { e.preventDefault(); } };
     window.addEventListener('beforeunload', h);
@@ -150,6 +170,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setChecks(j);
+      setCheckedAt(j.at);
       if (status === 'draft') setStatus('review');
     } catch (e: any) { setNote({ kind: 'bad', text: e.message }); }
     setChecking(false);
@@ -158,9 +179,12 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   const flagged = useMemo(() => new Set((checks?.results || []).filter((r) => r.status === 'fail' && r.blockId && !overrides[r.id]).map((r) => r.blockId!)), [checks, overrides]);
   async function setStatusAction(action: 'approve' | 'unapprove') {
     if (save !== 'saved') await doSave(c);
+    if (action === 'approve') { setChecking(true); setNote({ kind: '', text: stale || !checks ? 'Re-checking the latest version before approving…' : 'Approving…' }); }
     const r = await fetch(`/api/editions/${edition.id}/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
     const j = await r.json();
-    if (!r.ok) { setNote({ kind: 'bad', text: j.error }); setTab('checks'); return; }
+    setChecking(false);
+    if (j.checks) { setChecks(j.checks); setCheckedAt(j.checks.at); }
+    if (!r.ok) { setNote({ kind: 'bad', text: j.error }); setTab('checks'); document.querySelector('.ed-right')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     setStatus(j.status);
     setNote({ kind: 'ok', text: action === 'approve' ? 'Approved. Next: choose who gets it and when, on the Send page.' : 'Back in review.' });
   }
@@ -222,6 +246,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     first.current = true;
     setC(j.content);
     setStatus(j.status);
+    setSave('saved');
     setNote({ kind: 'ok', text: 'Version restored.' });
   }
 
@@ -231,7 +256,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   return (
     <div>
       <div className="statusbar">
-        <Link href="/app/editions" className="btn sm ghost">← Editions</Link>
+        <a href="/app/editions" className="btn sm ghost" onClick={(e) => { e.preventDefault(); go('/app/editions'); }}>← Editions</a>
         <span className="mono hint">#{String(edition.number).padStart(2, '0')}</span>
         <h1 title={c.title}>{c.title || 'Untitled edition'}</h1>
         <span className={`pill ${cls}`}><span className="dot" />{lbl}</span>
@@ -240,8 +265,8 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
         {!locked && <button className="btn" onClick={runChecks} disabled={checking}>{checking ? 'Checking…' : 'Run all checks'}</button>}
         {!locked && (status === 'approved' || status === 'scheduled'
           ? <button className="btn" onClick={() => setStatusAction('unapprove')}>Unapprove</button>
-          : <button className="btn primary" onClick={() => setStatusAction('approve')} disabled={!checks || blocking.length > 0} title={!checks ? 'Run the checks first' : blocking.length ? `${blocking.length} blocking check(s)` : ''}>Approve</button>)}
-        <Link className={`btn ${status === 'approved' || status === 'scheduled' ? 'primary' : ''}`} href={`/app/editions/${edition.id}/${locked || status === 'sent' ? 'analytics' : 'distribute'}`}>{locked ? 'Results →' : 'Send →'}</Link>
+          : <button className="btn primary" onClick={() => setStatusAction('approve')} disabled={checking || (!stale && !!checks && blocking.length > 0)} title={stale || !checks ? 'Runs the checks on the latest version first' : blocking.length ? `${blocking.length} blocking check(s)` : ''}>{checking ? 'Checking…' : 'Approve'}</button>)}
+        <a className={`btn ${status === 'approved' || status === 'scheduled' ? 'primary' : ''}`} href={`/app/editions/${edition.id}/${locked ? 'analytics' : 'distribute'}`} onClick={(e) => { e.preventDefault(); go(`/app/editions/${edition.id}/${locked ? 'analytics' : 'distribute'}`); }}>{locked ? 'Results →' : 'Send →'}</a>
         <a className="btn ghost" href={`${publicUrl}?preview=1`} target="_blank" rel="noreferrer">Open ↗</a>
       </div>
       {note && <div className={`notice ${note.kind}`} style={{ marginBottom: 12 }} onClick={() => setNote(null)}>{note.text}</div>}
@@ -252,7 +277,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
         <div className="ed-col">
           <fieldset disabled={locked} style={{ border: 0, padding: 0, margin: 0, display: 'grid', gap: 10, minWidth: 0 }}>
             <div className="blk">
-              <header onClick={() => setOpen(open === 'meta' ? null : 'meta')}><span className="typ">Top</span><span className="t">Headline & messages</span><span className="s">{c.subject}</span></header>
+              <header role="button" tabIndex={0} aria-expanded={open === 'meta'} onClick={() => setOpen(open === 'meta' ? null : 'meta')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(open === 'meta' ? null : 'meta'); } }}><span className="typ">Top</span><span className="t">Headline & messages</span><span className="s">{c.subject}</span></header>
               {open === 'meta' || !c.title ? (
                 <div className="body">
                   <label className="f"><span>Theme label (kicker)</span><input className="in" value={c.kicker} onChange={(e) => set({ kicker: e.target.value })} placeholder="e.g. Q3 in numbers" /></label>
@@ -281,7 +306,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
 
             {c.blocks.map((b, i) => (
               <div key={b.id} id={`blk-${b.id}`} className={`blk ${flagged.has(b.id) ? 'flag' : ''}`}>
-                <header onClick={() => setOpen(open === b.id ? null : b.id)}>
+                <header role="button" tabIndex={0} aria-expanded={open === b.id} onClick={() => setOpen(open === b.id ? null : b.id)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); setOpen(open === b.id ? null : b.id); } }}>
                   <span className="typ">{BLOCK_LABELS[b.type]}</span>
                   <span className="s">{summary(b)}</span>
                   <span className="tools" onClick={(e) => e.stopPropagation()}>
@@ -308,7 +333,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
           <details className="more card tight">
             <summary>More actions</summary>
             <div className="row" style={{ marginTop: 10 }}>
-              <button className="btn sm" type="button" onClick={() => doSave(c, { version: true, note: 'Saved by you' })}>Save a version</button>
+              {!locked && <button className="btn sm" type="button" onClick={() => doSave(c, { version: true, note: 'Saved by you' })}>Save a version</button>}
               <form action={duplicateAction}><button className="btn sm" type="submit">Duplicate</button></form>
               {!locked && <Confirm action={deleteAction} label="Delete edition" />}
             </div>
@@ -368,7 +393,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                       {c.blocks.map((b) => <option key={b.id} value={b.id}>{BLOCK_LABELS[b.type]}: {summary(b).slice(0, 40)}</option>)}
                     </select>
                   </label>
-                  <textarea className="in" rows={3} value={instr} placeholder="What should change?" onChange={(e) => setInstr(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) ask(); }} />
+                  <textarea className="in" rows={3} aria-label="Instruction for the copilot" value={instr} placeholder="What should change?" onChange={(e) => setInstr(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) ask(); }} />
                   <div className="row"><button type="button" className="btn primary" disabled={thinking || !instr.trim()} onClick={() => ask()}>Ask</button><span className="hint"><span className="kbd">Ctrl</span> + <span className="kbd">Enter</span></span></div>
                 </>}
               </div>
@@ -379,6 +404,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                 <div className="row"><button type="button" className="btn sm" onClick={runChecks} disabled={checking || locked}>{checking ? 'Checking links and facts…' : 'Run all checks'}</button>{checks && <span className="hint">Last run {new Date(checks.at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</span>}</div>
                 {checks ? (
                   <>
+                    {stale && <div className="notice warn">You’ve edited since these results. Run the checks again (Approve does it for you).</div>}
                     {blocking.length > 0 ? <div className="notice bad">{blocking.length} blocking check(s). Approval stays locked until they pass or you override them with a reason.</div> : <div className="notice ok">No blocking issues. You can approve.</div>}
                     <ul className="cl">{checks.results.map((r) => <CheckRow key={r.id} r={r} overridden={overrides[r.id]} onOpen={() => { if (r.blockId) { setOpen(r.blockId); document.getElementById(`blk-${r.blockId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }} onOverride={(reason) => override(r.id, reason)} locked={locked} />)}</ul>
                   </>
@@ -545,8 +571,10 @@ function BlockForm({ b, c, kb, stories, setBlock, setC }: { b: Block; c: Edition
 
 function MediaInput({ value, onChange, accept = 'image/*,video/mp4' }: { value: string; onChange: (v: string) => void; accept?: string }) {
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   return (
     <div className="row">
+      {err && <div className="notice bad" style={{ width: '100%' }}>{err}</div>}
       <input className="in" style={{ flex: 1 }} value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://…" />
       <label className="btn sm" style={{ cursor: 'pointer' }}>{busy ? 'Uploading…' : 'Upload'}
         <input type="file" accept={accept} hidden onChange={async (e) => {
@@ -558,7 +586,7 @@ function MediaInput({ value, onChange, accept = 'image/*,video/mp4' }: { value: 
           const r = await fetch('/api/upload', { method: 'POST', body: fd });
           const j = await r.json();
           setBusy(false);
-          if (r.ok) onChange(j.url); else alert(j.error);
+          if (r.ok) onChange(j.url); else setErr(j.error);
         }} />
       </label>
     </div>

@@ -25,7 +25,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
   return (
     <div className="stack" style={{ gap: 18 }}>
       <div className="ph">
-        <div><div className="eyebrow">Turn reads into conversations</div><h1>Leads</h1><p className="sub">Everyone who engaged, ranked by intent. Scores add up per edition: open page +5, read 75% +5, poll +10, “send me more” +15, “Our work” card +30, book +40, interested +50, not now −10. {HOT_SCORE}+ is hot.</p></div>
+        <div><div className="eyebrow">Turn reads into conversations</div><h1>Leads</h1><p className="sub">Everyone who engaged, ranked by intent. Scores add up per edition: email open +1, link click +3, open page +5, read 75% +5, poll +10, share or “send me more” +15, “Our work” card +30, book +40, interested +50, not now −10. {HOT_SCORE}+ is hot.</p></div>
         <a className="btn" href="/api/export?type=leads">Export leads CSV</a>
       </div>
       <div className="tabs">{VIEWS.map(([k, l]) => <Link key={k} href={`/app/leads?view=${k}`} aria-current={view === k ? 'page' : undefined}>{l}</Link>)}</div>
@@ -43,7 +43,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
                 <td><div className="row">
                   {wa && <a className="btn sm primary" href={wa} target="_blank" rel="noreferrer">WhatsApp</a>}
                   {c.email && <a className="btn sm" href={`mailto:${c.email}`}>Email</a>}
-                  {c.stage !== 'contacted' && <form action={setStage.bind(null, c.id, 'contacted')}><button className="btn sm ghost">Mark contacted</button></form>}
+                  {(c.stage === 'new' || c.stage === 'warm') && <form action={setStage.bind(null, c.id, 'contacted')}><button className="btn sm ghost">Mark contacted</button></form>}
                   {c.stage === 'contacted' && <form action={setStage.bind(null, c.id, 'meeting')}><button className="btn sm ghost">{STAGE_LABEL.meeting}</button></form>}
                 </div></td>
               </tr>

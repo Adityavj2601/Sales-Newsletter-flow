@@ -6,10 +6,10 @@ type StoryIn = { id: string; title: string; summary: string; publisher: string; 
 type KbIn = { id: string; pillar: string; status: string; title: string; summary: string; problem: string | null; result: string | null };
 
 const KEYWORDS: [RegExp, number][] = [
-  [/housing|residential|homes?|apartment|flat/i, 18], [/developer|builder|launch/i, 16], [/rera|regulat|compliance|order/i, 14],
-  [/sales|demand|absorption|inventory|unsold/i, 16], [/price|rate|repo|loan|emi/i, 10], [/marketing|lead|digital|campaign|portal|crm/i, 14],
-  [/india|mumbai|pune|bengaluru|bangalore|hyderabad|delhi|ncr|gurugram|noida|chennai|kolkata|ahmedabad/i, 10],
-  [/anarock|knight frank|propequity|jll|cbre|colliers|proptiger/i, 12], [/nri|luxury|premium/i, 6],
+  [/\b(?:housing|residential|homes?|apartment|flat)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 18], [/\b(?:developer|builder|launch)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 16], [/\b(?:rera|regulat|compliance|order)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 14],
+  [/\b(?:sales|demand|absorption|inventory|unsold)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 16], [/\b(?:price|rate|repo|loan|emi)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 10], [/\b(?:marketing|lead|digital|campaign|portal|crm)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 14],
+  [/\b(?:india|mumbai|pune|bengaluru|bangalore|hyderabad|delhi|ncr|gurugram|noida|chennai|kolkata|ahmedabad)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 10],
+  [/\b(?:anarock|knight frank|propequity|jll|cbre|colliers|proptiger)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 12], [/\b(?:nri|luxury|premium)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 6],
 ];
 export function heuristicScore(title: string, summary = ''): { score: number; reason: string } {
   const text = `${title} ${summary}`;
@@ -30,18 +30,18 @@ export function demoDraft(p: Product, stories: StoryIn[], kb: KbIn[], editionNo:
   const sources = s.map((st, i) => ({ id: `s${i + 1}`, url: st.url, title: st.title, publisher: st.publisher, date: (st.published_at || '').slice(0, 10) }));
   const blocks: Block[] = [];
   const tl = newBlock('tldr') as Extract<Block, { type: 'tldr' }>;
-  tl.bullets = s.slice(0, 3).map((st) => clip(firstSentence(st.summary || st.title), 160));
+  tl.bullets = [...new Set(s.slice(0, 3).map((st) => clip(firstSentence(st.summary || st.title).replace(/^\s*[-–—.:|]+\s*/, ''), 160)))].filter((x) => x.length > 3);
   blocks.push(tl);
   const num = s.map((st) => (st.title + ' ' + st.summary).match(/(₹\s?[\d,.]+\s?(lakh|crore|cr)?|\d[\d,.]*\s?(%|per cent|lakh|crore|units))/i)).find(Boolean);
   const stat = newBlock('stat') as Extract<Block, { type: 'stat' }>;
   stat.value = num ? num[0] : `${s.length}`;
   stat.caption = num ? clip(s.find((st) => (st.title + ' ' + st.summary).includes(num[0]))?.title || '', 120) : 'stories worth your time this week';
   stat.sourceIds = num ? [sources[s.findIndex((st) => (st.title + ' ' + st.summary).includes(num[0]))]?.id].filter(Boolean) as string[] : [];
-  blocks.push(stat);
+  if (num) blocks.push(stat); // no number in the stories → no 'number of the week'
   s.slice(0, 2).forEach((st, i) => {
     const b = newBlock('story') as Extract<Block, { type: 'story' }>;
     b.headline = clip(st.title, 90);
-    b.body = clip(st.summary || st.title, 520);
+    b.body = clip((st.summary || st.title).replace(/^\s*[-–—.:|]+\s*/, ''), 520);
     b.why = 'Demo mode wrote this placeholder. Connect an AI provider in Settings → AI and redraft to get a real "why it matters" angle.';
     b.sourceIds = [sources[i].id];
     blocks.push(b);
@@ -62,7 +62,7 @@ export function demoDraft(p: Product, stories: StoryIn[], kb: KbIn[], editionNo:
   return {
     kicker: 'This week',
     title,
-    dek: `${s.length === 1 ? 'The story' : `The ${s.length} stories`} that matter${s.length === 1 ? 's' : ''} this week, read for sales and marketing teams.`,
+    dek: `${Math.min(2, s.length) === 1 ? 'The story' : 'Two stories'} that matter${Math.min(2, s.length) === 1 ? 's' : ''} this week, read for sales and marketing teams.`,
     readMinutes: 3,
     subject: clip(`{first_name}, ${title}`, 70),
     preheader: 'Three minutes, the numbers that matter, and what to do about them.',

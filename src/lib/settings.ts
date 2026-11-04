@@ -22,7 +22,7 @@ export type AISettings = {
 export type SMTP = { host: string; port: number; secure: boolean; user: string; pass: string; from: string };
 export type WhatsApp = {
   phoneNumberId: string; token: string; wabaId: string; templateName: string; templateLang: string;
-  verifyToken: string; apiVersion: string;
+  verifyToken: string; apiVersion: string; appSecret: string;
   headerImage: boolean; bodyParams: string; button: 'quick_reply' | 'url' | 'none';
 };
 export type Alerts = { alertEmails: string; slackWebhook: string; webhookUrl: string };
@@ -40,7 +40,7 @@ const DEFAULTS = {
     monthlyTokenLimit: 0,
   },
   smtp: <SMTP>{ host: '', port: 587, secure: false, user: '', pass: '', from: '' },
-  whatsapp: <WhatsApp>{ phoneNumberId: '', token: '', wabaId: '', templateName: '', templateLang: 'en', verifyToken: '', apiVersion: 'v21.0', headerImage: true, bodyParams: 'first_name,title', button: 'quick_reply' },
+  whatsapp: <WhatsApp>{ phoneNumberId: '', token: '', wabaId: '', templateName: '', templateLang: 'en', verifyToken: '', apiVersion: 'v21.0', appSecret: '', headerImage: true, bodyParams: 'first_name,title', button: 'quick_reply' },
   alerts: <Alerts>{ alertEmails: '', slackWebhook: '', webhookUrl: '' },
 };
 type Keys = keyof typeof DEFAULTS;
@@ -79,8 +79,9 @@ export const waReady = () => {
 
 /** Public base URL without trailing slash. */
 export function baseUrl(fallback?: string): string {
-  const g = getSetting('general').publicBaseUrl || process.env.PUBLIC_BASE_URL || fallback || 'http://localhost:3000';
-  return g.replace(/\/+$/, '');
+  const ok = (v?: string) => !!v && /^https?:\/\/[^\s"'<>]+$/i.test(v);
+  const cands = [getSetting('general').publicBaseUrl, process.env.PUBLIC_BASE_URL, fallback, 'http://localhost:3000'];
+  return (cands.find(ok) as string).replace(/\/+$/, '');
 }
 
 /* ---------- Products ---------- */

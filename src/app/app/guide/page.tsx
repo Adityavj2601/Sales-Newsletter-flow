@@ -1,11 +1,15 @@
 import { requireUser } from '@/lib/auth';
 import Link from 'next/link';
 import { MATURITY, PILLARS } from '@/lib/types';
+import { getSetting } from '@/lib/settings';
+import { WEEKDAYS } from '@/lib/format';
 
 export const metadata = { title: 'How it works' };
 
 export default async function Guide() {
   await requireUser();
+  const g = getSetting('general');
+  const sendDay = `${WEEKDAYS[g.sendDay]} ${g.sendTime}`;
   return (
     <div className="stack prose" style={{ gap: 6 }}>
       <div className="eyebrow">Guide</div>
@@ -15,9 +19,9 @@ export default async function Guide() {
       <h2>The weekly rhythm</h2>
       <ol>
         <li><b>Every morning:</b> “Fetch news” reads your sources and scores each story for your readers. <Link href="/app/stories">Story pool</Link></li>
-        <li><b>Monday 9:00:</b> “Draft this week’s edition” writes a draft from the best (or shortlisted) stories and the next “Our work” items, runs the checks and notifies you.</li>
+        <li><b>Monday 9:00 (default):</b> “Draft this week’s edition” writes a draft from the best (or shortlisted) stories and the next “Our work” items, runs the checks and notifies you.</li>
         <li><b>Monday–Tuesday (15–30 min):</b> review in the editor. Ask the copilot for changes; you see a diff before anything is applied. Run all checks, then approve.</li>
-        <li><b>Thursday 10:00:</b> scheduled email goes out; work through the WhatsApp list (or the Business API sends it).</li>
+        <li><b>{sendDay} (your send time):</b> scheduled email goes out; work through the WhatsApp list (or the Business API sends it).</li>
         <li><b>Whenever someone taps “I’m interested”:</b> you get an email (and Slack/webhook if set), and they appear under <Link href="/app/leads">Leads</Link>. Reply the same day.</li>
         <li><b>Friday 17:30:</b> weekly report by email.</li>
       </ol>

@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 import { getEdition } from '@/lib/editions';
-import { queueEdition, scheduleEdition, unscheduleEdition, sendTestEmail, markSent, canSend } from '@/lib/send';
+import { queueEdition, scheduleEdition, unscheduleEdition, sendTestEmail, markSent, canSend, retryFailed } from '@/lib/send';
 import { zonedToUtc } from '@/lib/format';
 import { getSetting } from '@/lib/settings';
 import { tick } from '@/lib/jobs';
@@ -19,15 +19,22 @@ export const POST = api<{ id: string }>(async ({ params, body }) => {
     }
     case 'now': {
       const n = queueEdition(e.id, cfg);
+      if (!n) return { message: 'Everyone in this audience already has it. Nothing new to send.' };
       tick().catch(() => null);
       return { message: `${n} message(s) queued. Sending now at the pace set in Settings.` };
     }
     case 'schedule': {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(body.at || ''))) throw new Error('Pick a date and time for the send.');
       const at = zonedToUtc(String(body.at), getSetting('general').timezone);
       scheduleEdition(e.id, at, cfg);
       return { message: 'Scheduled.', at };
     }
     case 'unschedule': unscheduleEdition(e.id); return { message: 'Schedule cancelled. The edition is still approved.' };
+    case 'retry': {
+      const n = retryFailed(e.id);
+      tick().catch(() => null);
+      return { message: n ? `${n} failed message(s) queued again.` : 'Nothing failed to retry.' };
+    }
     case 'markSent': {
       const why = canSend(e);
       if (why) throw new Error(why);

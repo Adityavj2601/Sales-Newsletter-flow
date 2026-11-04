@@ -68,6 +68,17 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
 };
 
 const rid = () => Math.random().toString(36).slice(2, 9);
+
+/** Only http(s), mailto and site-relative URLs survive; anything else (javascript:, data:, quotes) becomes ''. */
+export function safeUrl(v: any): string {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return '';
+  if (/["'<>\s]/.test(s)) return '';
+  if (/^(https?:\/\/|mailto:)/i.test(s)) return s;
+  if (s.startsWith('/') && !s.startsWith('//')) return s;
+  return '';
+}
+const safeId = (v: any) => (typeof v === 'string' && /^[\w-]{1,40}$/.test(v) ? v : '');
 const str = (v: any, d = '') => (typeof v === 'string' ? v : v == null ? d : String(v));
 const arr = <T>(v: any): T[] => (Array.isArray(v) ? v : []);
 const strs = (v: any) => arr<any>(v).map((x) => str(x)).filter(Boolean);
@@ -93,7 +104,7 @@ export function newBlock(type: BlockType): Block {
 export function normalizeContent(raw: any): EditionContent {
   const r = raw && typeof raw === 'object' ? raw : {};
   const sources: Source[] = arr<any>(r.sources)
-    .map((s) => ({ id: str(s.id) || rid(), url: str(s.url), title: str(s.title), publisher: str(s.publisher), date: str(s.date) }))
+    .map((s) => ({ id: safeId(s.id) || rid(), url: safeUrl(s.url), title: str(s.title), publisher: str(s.publisher), date: str(s.date) }))
     .filter((s) => s.url);
   const seen = new Set<string>();
   const blocks: Block[] = arr<any>(r.blocks)
@@ -121,8 +132,8 @@ export function normalizeContent(raw: any): EditionContent {
 
 function normalizeBlock(b: any): Block | null {
   if (!b || typeof b !== 'object') return null;
-  const id = str(b.id) || rid();
-  const sourceIds = strs(b.sourceIds);
+  const id = safeId(b.id) || rid();
+  const sourceIds = strs(b.sourceIds).filter((x) => safeId(x));
   switch (b.type) {
     case 'tldr': return { id, type: 'tldr', heading: str(b.heading, 'The 30-second version'), bullets: strs(b.bullets) };
     case 'stat': return { id, type: 'stat', value: str(b.value), caption: str(b.caption), sourceIds };
@@ -135,17 +146,17 @@ function normalizeBlock(b: any): Block | null {
     case 'showcase': {
       const pillar: Pillar = ['feature', 'delivered', 'concept'].includes(b.pillar) ? b.pillar : 'feature';
       const status: Maturity = ['live', 'delivered', 'pilot', 'prototype', 'concept'].includes(b.status) ? b.status : PILLARS[pillar].defaultStatus;
-      return { id, type: 'showcase', pillar, status, kbId: str(b.kbId) || undefined, title: str(b.title), body: str(b.body), mediaUrl: str(b.mediaUrl) || undefined, cta: str(b.cta) || MATURITY[status].cta, placeholder: !!b.placeholder };
+      return { id, type: 'showcase', pillar, status, kbId: safeId(b.kbId) || undefined, title: str(b.title), body: str(b.body), mediaUrl: safeUrl(b.mediaUrl) || undefined, cta: str(b.cta) || MATURITY[status].cta, placeholder: !!b.placeholder };
     }
-    case 'video': return { id, type: 'video', url: str(b.url), caption: str(b.caption) };
-    case 'image': return { id, type: 'image', url: str(b.url), alt: str(b.alt), caption: str(b.caption) };
+    case 'video': return { id, type: 'video', url: safeUrl(b.url), caption: str(b.caption) };
+    case 'image': return { id, type: 'image', url: safeUrl(b.url), alt: str(b.alt), caption: str(b.caption) };
     case 'quote': return { id, type: 'quote', text: str(b.text), author: str(b.author) };
     case 'text': return { id, type: 'text', heading: str(b.heading), body: str(b.body) };
     case 'poll': return { id, type: 'poll', question: str(b.question), options: strs(b.options).slice(0, 5) };
     case 'cta': {
       const valid: CtaAction[] = ['interested', 'book', 'more', 'share', 'notnow'];
       const actions = strs(b.actions).filter((a): a is CtaAction => (valid as string[]).includes(a));
-      return { id, type: 'cta', heading: str(b.heading, 'Curious?'), body: str(b.body), actions: actions.length ? actions : valid };
+      return { id, type: 'cta', heading: str(b.heading, 'Curious?'), body: str(b.body), actions: Array.isArray(b.actions) ? actions : valid };
     }
   }
   return null;

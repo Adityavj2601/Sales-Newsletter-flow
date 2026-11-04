@@ -5,7 +5,7 @@ import { MATURITY, PILLARS } from '@/lib/types';
 import { configuredProviders } from '@/lib/ai/providers';
 import { ago } from '@/lib/format';
 import { MaturityPill } from '@/components/bits';
-import { Submit } from '@/components/ui';
+import { Submit, Confirm } from '@/components/ui';
 import { saveKb, deleteKb, importWebsite } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -53,7 +53,7 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
         <p>{p.brand.about || <span className="hint">No description yet. Import it from the website or write it in Settings → Products. The AI uses it to pick stories and write the “Our work” cards.</span>}</p>
         {p.brand.icp && <p className="hint"><b>Readers:</b> {p.brand.icp}</p>}
       </section>
-      {(sp.add || editing) && <section className="card"><div className="card-head"><h2>{editing ? 'Edit item' : 'New item'}</h2><Link href="/app/knowledge" className="btn sm ghost">Close</Link></div><KbForm k={editing} /></section>}
+      {(sp.add || editing) && <section className="card"><div className="card-head"><h2>{editing ? 'Edit item' : 'New item'}</h2><Link href="/app/knowledge" className="btn sm ghost">Close</Link></div><KbForm key={editing?.id || 'new'} k={editing} /></section>}
       {review.length > 0 && <div className="notice warn"><b>{review.length} item(s) need your review.</b> Imported or unconfirmed items are never used until you confirm their real status.</div>}
       {items.length ? (
         <div className="grid3">
@@ -65,7 +65,7 @@ export default async function Knowledge({ searchParams }: { searchParams: Promis
               {k.result && <p style={{ margin: 0, fontSize: 13.5 }}><b>Result:</b> {k.result}</p>}
               {k.client_name && <p className="hint" style={{ margin: 0 }}>Client: {k.client_name} · {k.client_permission ? 'may be named' : 'keep anonymous'}</p>}
               <div className="hint">Featured {k.times_featured}× · last {ago(k.last_featured_at)}</div>
-              <div className="row"><Link className="btn sm" href={`/app/knowledge?edit=${k.id}`}>{k.active ? 'Edit' : 'Review'}</Link><form action={deleteKb.bind(null, k.id)}><button className="btn sm ghost">Delete</button></form></div>
+              <div className="row"><Link className="btn sm" href={`/app/knowledge?edit=${k.id}`}>{k.active ? 'Edit' : 'Review'}</Link><Confirm action={deleteKb.bind(null, k.id)} label="Delete" className="btn sm ghost" /></div>
             </article>
           ))}
         </div>

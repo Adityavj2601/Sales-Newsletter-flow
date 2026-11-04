@@ -6,24 +6,25 @@ import { getSetting, listProducts, providerKey, PROVIDERS, smtpPass, waToken, ba
 import { MODEL_DEFAULTS, PROVIDER_LABEL, tokensThisMonth, routeFor } from '@/lib/ai/providers';
 import { mask } from '@/lib/crypto';
 import { WEEKDAYS, num, fmtDate } from '@/lib/format';
-import { Submit, Copy } from '@/components/ui';
+import { Submit, Copy, Confirm } from '@/components/ui';
 import { TestButton } from './Test';
 import * as A from '../actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Settings' };
 
-const TABS = [['general', 'General'], ['products', 'Products & brand'], ['ai', 'AI providers'], ['email', 'Email sending'], ['whatsapp', 'WhatsApp'], ['alerts', 'Alerts & CRM'], ['team', 'Team'], ['data', 'Data']] as const;
+const ALL_TABS = [['general', 'General'], ['products', 'Products & brand'], ['ai', 'AI providers'], ['email', 'Email sending'], ['whatsapp', 'WhatsApp'], ['alerts', 'Alerts & CRM'], ['team', 'Team'], ['data', 'Data']] as const;
 const TASKS = [['draft', 'Write editions', 'Your best writing model'], ['edit', 'Copilot edits', 'Usually the same as writing'], ['fast', 'Score stories & subject lines', 'A fast, cheap model'], ['factcheck', 'Fact check', 'Auto picks a different company from the writer']] as const;
 
 export default async function Settings({ searchParams }: { searchParams: Promise<{ tab?: string; p?: string }> }) {
   const me = await requireUser();
   const sp = await searchParams;
-  const tab = sp.tab || 'general';
+  const TABS = me.role === 'admin' ? ALL_TABS : ALL_TABS.filter(([k]) => k === 'team');
+  const tab = me.role === 'admin' ? sp.tab || 'general' : 'team';
   const g = getSetting('general');
   return (
     <div className="stack" style={{ gap: 18 }}>
-      <div className="ph"><div><h1>Settings</h1>{me.role !== 'admin' && <p className="sub">Only admins can change settings.</p>}</div></div>
+      <div className="ph"><div><h1>Settings</h1>{me.role !== 'admin' && <p className="sub">You’re an editor. Only admins can change products, AI keys, sending and alerts; you can change your own password here.</p>}</div></div>
       <div className="tabs">{TABS.map(([k, l]) => <Link key={k} href={`/app/settings?tab=${k}`} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</div>
 
       {tab === 'general' && (
@@ -77,6 +78,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
               <label className="f"><span>Phone number ID</span><input className="in" name="phoneNumberId" defaultValue={w.phoneNumberId} /></label>
               <label className="f"><span>WhatsApp Business Account ID</span><input className="in" name="wabaId" defaultValue={w.wabaId} /></label>
               <label className="f"><span>Permanent access token {w.token ? `(saved: ${mask(waToken())})` : ''}</span><input className="in" name="token" type="password" autoComplete="new-password" placeholder={w.token ? 'Leave empty to keep' : ''} /></label>
+              <label className="f"><span>Meta App Secret {w.appSecret ? '(saved)' : ''}</span><input className="in" name="appSecret" type="password" autoComplete="new-password" placeholder={w.appSecret ? 'Leave empty to keep' : 'From Meta app → Settings → Basic'} /><small>Used to check that webhook calls really come from Meta.</small></label>
               <label className="f"><span>Graph API version</span><input className="in" name="apiVersion" defaultValue={w.apiVersion} /></label>
               <label className="f"><span>Template name</span><input className="in" name="templateName" defaultValue={w.templateName} placeholder="weekly_brief" /></label>
               <label className="f"><span>Template language</span><input className="in" name="templateLang" defaultValue={w.templateLang} placeholder="en" /></label>
@@ -112,8 +114,8 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           <div className="stack">
             <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th></th></tr></thead>
               <tbody>{users.map((u) => <tr key={u.id}><td>{u.name}{u.id === me.id ? ' (you)' : ''}</td><td>{u.email}</td><td>{u.role}</td><td className="hint">{fmtDate(u.created_at)}</td><td>{u.id !== me.id && me.role === 'admin' && <div className="row end">
-                <form action={A.resetUserPassword} className="row"><input type="hidden" name="id" value={u.id} /><input className="in" name="password" type="password" placeholder="New password" style={{ width: 150 }} autoComplete="new-password" /><button className="btn sm">Reset</button></form>
-                <form action={A.deleteUser}><input type="hidden" name="id" value={u.id} /><button className="btn sm ghost">Remove</button></form></div>}</td></tr>)}</tbody></table></div>
+                <form action={A.resetUserPassword} className="row"><input type="hidden" name="id" value={u.id} /><input className="in" name="password" type="password" placeholder="New password" aria-label={`New password for ${u.name}`} style={{ width: 150 }} autoComplete="new-password" /><button className="btn sm">Reset</button></form>
+                <Confirm action={A.deleteUser.bind(null, u.id)} label="Remove" className="btn sm ghost" /></div>}</td></tr>)}</tbody></table></div>
             {me.role === 'admin' && <form action={A.addUser} className="card form-grid"><h2 className="full">Add a teammate</h2>
               <label className="f"><span>Name</span><input className="in" name="name" /></label><label className="f"><span>Email</span><input className="in" name="email" type="email" required /></label>
               <label className="f"><span>Temporary password</span><input className="in" name="password" type="password" minLength={8} required autoComplete="new-password" /></label>
@@ -168,7 +170,7 @@ async function ProductsTab({ sel }: { sel?: string }) {
             <label className="f" style={{ flex: 1 }}><span>Logo URL (wide logo on a transparent background)</span><input className="in" name="logoUrl" defaultValue={p.brand.logoUrl} placeholder="Upload in any editor image field, then paste the link" /></label>
           </div>
           <label className="f"><span>Sender name</span><input className="in" name="senderName" defaultValue={p.brand.senderName} /></label>
-          <label className="f"><span>Sender email</span><input className="in" name="senderEmail" type="email" defaultValue={p.brand.senderEmail} placeholder="brief@news.unada.io" /></label>
+          <label className="f"><span>Sender email</span><input className="in" name="senderEmail" type="email" defaultValue={p.brand.senderEmail} placeholder={`brief@news.${(p.website || 'yourdomain.com').replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '')}`} /></label>
           <label className="f"><span>Reply-to email</span><input className="in" name="replyTo" type="email" defaultValue={p.brand.replyTo} /></label>
           <label className="f"><span>Sign-off</span><input className="in" name="signOff" defaultValue={p.brand.signOff} /></label>
           <label className="f full"><span>Registered address (email footer)</span><input className="in" name="address" defaultValue={p.brand.address} /></label>
@@ -217,8 +219,8 @@ function AiTab() {
             const r = ai.routing[t];
             const now = routeFor(t)[0];
             return <tr key={t}><td><b>{l}</b><div className="hint">{h}</div></td>
-              <td><select className="in" name={`route_${t}`} defaultValue={r.provider}><option value="auto">Auto</option>{PROVIDERS.map((pv) => <option key={pv} value={pv}>{PROVIDER_LABEL[pv]}</option>)}</select></td>
-              <td><input className="in mono" name={`model_${t}`} defaultValue={r.model} placeholder="default" list={`models-${t}`} /><datalist id={`models-${t}`}>{PROVIDERS.flatMap((pv) => MODEL_DEFAULTS[pv].suggestions).map((m) => <option key={m} value={m} />)}</datalist></td>
+              <td><select className="in" aria-label={`Provider for ${l}`} name={`route_${t}`} defaultValue={r.provider}><option value="auto">Auto</option>{PROVIDERS.map((pv) => <option key={pv} value={pv}>{PROVIDER_LABEL[pv]}</option>)}</select></td>
+              <td><input className="in mono" aria-label={`Model for ${l}`} name={`model_${t}`} defaultValue={r.model} placeholder="default" list={`models-${t}`} /><datalist id={`models-${t}`}>{PROVIDERS.flatMap((pv) => MODEL_DEFAULTS[pv].suggestions).map((m) => <option key={m} value={m} />)}</datalist></td>
               <td className="hint">{now ? `${PROVIDER_LABEL[now.provider]} · ${now.model}` : 'Demo mode'}</td></tr>;
           })}
         </tbody></table></div>

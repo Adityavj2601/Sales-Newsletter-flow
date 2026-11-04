@@ -2,14 +2,45 @@
 
 export const UA = 'Mozilla/5.0 (compatible; BriefStudio/1.0; +https://github.com/)';
 
+/** Blocks requests to loopback, private, link-local and metadata addresses (SSRF). Set ALLOW_PRIVATE_FETCH=1 to allow, e.g. for local testing. */
+export async function assertPublicUrl(raw: string): Promise<URL> {
+  let u: URL;
+  try { u = new URL(raw); } catch { throw new Error('That is not a valid web address.'); }
+  if (!/^https?:$/.test(u.protocol)) throw new Error('Only http(s) addresses are allowed.');
+  if (process.env.ALLOW_PRIVATE_FETCH === '1') return u;
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const { lookup } = await import('node:dns/promises');
+  const { isIP } = await import('node:net');
+  const addrs = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [] as { address: string }[])).map((a) => a.address);
+  if (!addrs.length) throw new Error(`Could not find ${host}.`);
+  for (const a of addrs) if (isPrivate(a)) throw new Error('Addresses on private or internal networks are not allowed.');
+  return u;
+}
+function isPrivate(ip: string): boolean {
+  const v4 = ip.replace(/^::ffff:/i, '');
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) {
+    const [a, b] = v4.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  const x = ip.toLowerCase();
+  return x === '::' || x === '::1' || x.startsWith('fc') || x.startsWith('fd') || x.startsWith('fe80');
+}
+
 export async function fetchText(url: string, ms = 12000): Promise<{ status: number; text: string; finalUrl: string; type: string }> {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
-    const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/xml,application/rss+xml;q=0.9,*/*;q=0.8' }, redirect: 'follow', signal: ctl.signal });
-    const type = res.headers.get('content-type') || '';
-    const text = type.includes('image') || type.includes('video') ? '' : (await res.text()).slice(0, 2_000_000);
-    return { status: res.status, text, finalUrl: res.url || url, type };
+    let current = url;
+    for (let hop = 0; hop < 6; hop++) {
+      await assertPublicUrl(current); // re-checked on every redirect
+      const res = await fetch(current, { headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/xml,application/rss+xml;q=0.9,*/*;q=0.8' }, redirect: 'manual', signal: ctl.signal });
+      const loc = res.headers.get('location');
+      if (res.status >= 300 && res.status < 400 && loc) { current = new URL(loc, current).toString(); continue; }
+      const type = res.headers.get('content-type') || '';
+      const text = type.includes('image') || type.includes('video') ? '' : (await res.text()).slice(0, 2_000_000);
+      return { status: res.status, text, finalUrl: current, type };
+    }
+    throw new Error('Too many redirects.');
   } finally {
     clearTimeout(t);
   }

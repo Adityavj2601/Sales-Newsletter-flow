@@ -9,7 +9,8 @@ async function post(url: string, body: any) {
   return j;
 }
 
-export function EmailSend({ editionId, status, blocked, total, tags, cities, waApi, defaultAt, tz, pace }: { editionId: string; status: string; blocked: boolean; total: number; tags: string[]; cities: string[]; waApi: boolean; defaultAt: string; tz: string; pace: number }) {
+type P = { tags: string[]; city: string };
+export function EmailSend({ editionId, status, blocked, total, tags, cities, waApi, defaultAt, tz, pace, emailPeople, waPeople, failed }: { editionId: string; status: string; blocked: boolean; total: number; tags: string[]; cities: string[]; waApi: boolean; defaultAt: string; tz: string; pace: number; emailPeople: P[]; waPeople: P[]; failed: number }) {
   const [sel, setSel] = useState<string[]>([]);
   const [city, setCity] = useState('');
   const [wa, setWa] = useState(false);
@@ -27,7 +28,12 @@ export function EmailSend({ editionId, status, blocked, total, tags, cities, waA
     catch (e: any) { setMsg({ k: 'bad', t: e.message }); }
     setBusy(false); setConfirm(false);
   }
-  const done = status === 'sent' || status === 'sending';
+  const match = (p: P) => (!sel.length || sel.some((t) => p.tags.includes(t.toLowerCase()))) && (!city || p.city === city.toLowerCase());
+  const nEmail = emailPeople.filter(match).length;
+  const nWa = wa ? waPeople.filter(match).length : 0;
+  const count = nEmail + nWa;
+  const countLabel = `${nEmail} email${nEmail === 1 ? '' : 's'}${wa ? ` + ${nWa} WhatsApp` : ''}`;
+  const sent = status === 'sent' || status === 'sending';
   return (
     <div className="stack" style={{ gap: 14 }}>
       <div className="grid2">
@@ -40,24 +46,25 @@ export function EmailSend({ editionId, status, blocked, total, tags, cities, waA
           <div className="eyebrow">Who gets it</div>
           {tags.length > 0 && <div className="chips">{tags.map((t) => <button key={t} type="button" className="chip" style={sel.includes(t) ? { borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' } : {}} onClick={() => setSel(sel.includes(t) ? sel.filter((x) => x !== t) : [...sel, t])}>{sel.includes(t) ? '✓ ' : ''}{t}</button>)}</div>}
           {cities.length > 0 && <select className="in" value={city} onChange={(e) => setCity(e.target.value)}><option value="">All cities</option>{cities.map((c) => <option key={c}>{c}</option>)}</select>}
-          <div className="hint">{sel.length || city ? 'Filtered audience. ' : ''}Everyone with email consent{sel.length ? ` tagged ${sel.join(' or ')}` : ''}{city ? ` in ${city}` : ''}. Up to {total} people (unsubscribed and “less often” readers are skipped automatically).</div>
+          <div className="hint">{sel.length || city ? 'Filtered audience. ' : ''}Everyone with email consent{sel.length ? ` tagged ${sel.join(' or ')}` : ''}{city ? ` in ${city}` : ''}. Will go to <b>{countLabel}</b>{sent ? ' who haven’t received it yet' : ''}. Unsubscribed and “less often” readers are skipped automatically.</div>
           {waApi && <label className="check"><input type="checkbox" checked={wa} onChange={(e) => setWa(e.target.checked)} /><span>Also send via WhatsApp Business API (to people with WhatsApp consent)</span></label>}
         </div>
       </div>
       {msg && <div className={`notice ${msg.k}`}>{msg.t}</div>}
-      {!done && (
+      {(
         <div className="row" style={{ borderTop: '1px solid var(--line-2)', paddingTop: 14 }}>
-          <label className="f" style={{ flexDirection: 'row' }}><span>Send at ({tz})</span><input className="in" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></label>
-          {status === 'scheduled'
+          {!sent && <label className="f"><span>Send at ({tz})</span><input className="in" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></label>}
+          {!sent && (status === 'scheduled'
             ? <button className="btn" disabled={busy} onClick={() => go({ mode: 'unschedule' })}>Cancel schedule</button>
-            : <button className="btn" disabled={busy || blocked} onClick={() => go({ mode: 'schedule', at, channels, audience })}>Schedule</button>}
+            : <button className="btn" disabled={busy || blocked || count === 0} onClick={() => go({ mode: 'schedule', at, channels, audience })}>Schedule</button>)}
           <span className="spacer" />
           {confirm
-            ? <><span className="hint">Send to up to {total} people now?</span><button className="btn primary" disabled={busy} onClick={() => go({ mode: 'now', channels, audience })}>Yes, send now</button><button className="btn ghost" onClick={() => setConfirm(false)}>Cancel</button></>
-            : <button className="btn primary" disabled={busy || blocked || total === 0} onClick={() => setConfirm(true)}>Send now</button>}
+            ? <><span className="hint">Send {countLabel} now?</span><button className="btn primary" disabled={busy} onClick={() => go({ mode: 'now', channels, audience })}>Yes, send now</button><button className="btn ghost" onClick={() => setConfirm(false)}>Cancel</button></>
+            : <button className="btn primary" disabled={busy || blocked || count === 0} onClick={() => setConfirm(true)}>{sent ? `Send to the rest (${count})` : 'Send now'}</button>}
+          {failed > 0 && <button className="btn" disabled={busy} onClick={() => go({ mode: 'retry' })}>Retry {failed} failed</button>}
         </div>
       )}
-      {!done && <div className="hint">Emails go out at {pace} per minute to protect your sender reputation. You can close this page.</div>}
+      {!sent && <div className="hint">Emails go out at {pace} per minute to protect your sender reputation. You can close this page.</div>}
       {status === 'approved' && <div className="hint">Only sending by WhatsApp or link? <button className="btn sm ghost" onClick={() => go({ mode: 'markSent' })}>Mark this edition as sent</button></div>}
     </div>
   );
@@ -82,7 +89,7 @@ export function WaList({ editionId, contacts, blocked }: { editionId: string; co
   }
   return (
     <div className="stack" style={{ gap: 10 }}>
-      <div className="row"><span className="pill info">{done} of {contacts.length} sent</span><input className="in" style={{ maxWidth: 260 }} type="search" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      <div className="row"><span className="pill info">{done} of {contacts.length} sent</span><input className="in" style={{ maxWidth: 260 }} type="search" aria-label="Search WhatsApp list" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       {blocked && <div className="notice warn">Approve the edition before sending.</div>}
       {err && <div className="notice bad">{err}</div>}
       <div className="tbl-wrap" style={{ maxHeight: 380, overflowY: 'auto' }}><table className="tbl"><tbody>

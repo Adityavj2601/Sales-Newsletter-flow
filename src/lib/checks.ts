@@ -33,8 +33,8 @@ export async function runChecks(editionId: string, deep = true): Promise<ChecksR
   add({ id: 'title', label: 'Headline written', status: c.title.trim() ? 'ok' : 'fail', blocking: true, detail: c.title ? undefined : 'Add a headline.' });
   add({ id: 'preview-title', label: `Preview title ${c.preview.title.length}/60 characters`, status: c.preview.title.length && c.preview.title.length <= 60 ? 'ok' : c.preview.title.length ? 'warn' : 'fail', blocking: !c.preview.title.length, detail: c.preview.title.length > 60 ? 'WhatsApp and LinkedIn cut long titles. Shorten it.' : undefined });
   add({ id: 'preview-desc', label: `Preview description ${c.preview.description.length}/110 characters`, status: c.preview.description.length && c.preview.description.length <= 110 ? 'ok' : 'warn' });
-  add({ id: 'subject', label: 'Email subject and preview text', status: c.subject && c.preheader ? (c.subject.replace('{first_name}', 'Rohan').length <= 70 ? 'ok' : 'warn') : 'fail', blocking: !c.subject, detail: !c.preheader ? 'Add preview text; otherwise inboxes show the first line of the email.' : undefined });
-  add({ id: 'wa', label: 'WhatsApp message has the link', status: c.waText.includes('{link}') ? (c.waText.length <= 400 ? 'ok' : 'warn') : 'fail', blocking: true, detail: c.waText.includes('{link}') ? (c.waText.length > 400 ? 'Long WhatsApp messages get skimmed. Keep it under ~320 characters.' : undefined) : 'Put {link} in the WhatsApp text so each person gets their own tracked link.' });
+  add({ id: 'subject', label: 'Email subject and preview text', status: !c.subject ? 'fail' : c.preheader && c.subject.replace('{first_name}', 'Rohan').length <= 70 ? 'ok' : 'warn', blocking: !c.subject, detail: !c.preheader ? 'Add preview text; otherwise inboxes show the first line of the email.' : undefined });
+  add({ id: 'wa', label: 'WhatsApp message has the link', status: c.waText.includes('{link}') ? (c.waText.length <= 400 ? 'ok' : 'warn') : 'fail', blocking: true, detail: c.waText.includes('{link}') ? (c.waText.length > 400 ? 'Long WhatsApp messages get skimmed. Keep it under 400 characters.' : undefined) : 'Put {link} in the WhatsApp text so each person gets their own tracked link.' });
   const stories = blocks.filter((b) => b.type === 'story');
   add({ id: 'industry', label: 'At least one industry story', status: stories.length ? 'ok' : 'fail', blocking: true });
   const show = blocks.filter((b) => b.type === 'showcase') as Extract<Block, { type: 'showcase' }>[];
@@ -49,12 +49,15 @@ export async function runChecks(editionId: string, deep = true): Promise<ChecksR
       (b.type === 'tldr' && b.bullets.filter((x) => x.trim()).length === 0) ||
       (b.type === 'chart' && b.data.length < 2) ||
       (b.type === 'poll' && (!b.question.trim() || b.options.filter(Boolean).length < 2)) ||
-      ((b.type === 'video' || b.type === 'image') && !b.url.trim());
+      ((b.type === 'video' || b.type === 'image') && !b.url.trim()) ||
+      (b.type === 'cta' && !b.actions.length);
     if (empty) add({ id: `empty-${b.id}`, label: `Unfinished ${b.type} block`, status: 'fail', blocking: true, blockId: b.id, detail: 'Fill it in or delete it.' });
   }
 
-  // Sources
+  // Sources (skipped for blocks already flagged as unfinished)
+  const unfinished = new Set(R.filter((r) => r.id.startsWith('empty-')).map((r) => r.blockId));
   for (const b of blocks) {
+    if (unfinished.has(b.id)) continue;
     if (b.type === 'stat' || b.type === 'chart' || (b.type === 'story' && !b.opinion)) {
       const ids = b.sourceIds.filter((s) => srcIds.has(s));
       const name = b.type === 'story' ? `"${b.headline.slice(0, 50)}"` : b.type === 'stat' ? `Number "${b.value}"` : `Chart "${b.title.slice(0, 40)}"`;
@@ -90,16 +93,18 @@ export async function runChecks(editionId: string, deep = true): Promise<ChecksR
   if (show.length && !maturityIssues) add({ id: 'maturity', label: '"Our work" wording matches each item’s status', status: 'ok' });
 
   // Brand / spam words
-  const all = JSON.stringify(c).toLowerCase();
-  const bw = banned.filter((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(all));
+  // Only text readers see; source titles and URLs are other people's words.
+  const readerText = [c.kicker, c.title, c.dek, c.subject, c.preheader, c.waText, c.preview.title, c.preview.description, ...blocks.map((b: any) => [b.heading, b.bullets, b.value, b.caption, b.headline, b.body, b.why, b.title, b.insight, b.text, b.question, b.options, b.cta, b.alt].flat().filter(Boolean).join(' '))].join(' ').toLowerCase();
+  const bw = banned.filter((w) => new RegExp(`(?<![\\w])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`).test(readerText));
   add({ id: 'banned', label: bw.length ? `Banned words used: ${bw.join(', ')}` : 'No banned words', status: bw.length ? 'fail' : 'ok', blocking: bw.length > 0 });
   const subj = `${c.subject} ${c.preheader}`.toLowerCase();
   const sp = SPAM.filter((w) => subj.includes(w));
-  const caps = (c.subject.match(/\b[A-Z]{4,}\b/g) || []).length;
+  // Acronyms like RERA, CBRE, NBFC are normal; only long shouted words count.
+  const caps = (c.subject.match(/\b[A-Z]{7,}\b/g) || []).length;
   add({ id: 'spam', label: sp.length || caps ? 'Subject line may trigger spam filters' : 'Subject line passes spam-word check', status: sp.length || caps ? 'warn' : 'ok', detail: sp.length ? `Avoid: ${sp.join(', ')}` : caps ? 'Avoid ALL-CAPS words.' : undefined });
 
   // Images / media
-  for (const b of blocks) if (b.type === 'image' && !b.alt.trim()) add({ id: `alt-${b.id}`, label: 'Image without alt text', status: 'warn', blockId: b.id });
+  for (const b of blocks) if (b.type === 'image' && b.url.trim() && !b.alt.trim()) add({ id: `alt-${b.id}`, label: 'Image without alt text', status: 'warn', blockId: b.id });
 
   // Email size
   const html = renderEmail(e, p, null);

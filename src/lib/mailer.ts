@@ -31,5 +31,5 @@ export async function sendMail(m: Mail): Promise<{ id: string; outbox: boolean }
 export async function verifySmtp(): Promise<string> {
   if (!smtpReady()) throw new Error('Add the SMTP host and From address first.');
   await getTransport().verify();
-  return 'Connected. The server accepted the login.';
+  return getSetting('smtp').user ? 'Connected. The server accepted the login.' : 'Connected (no login used).';
 }

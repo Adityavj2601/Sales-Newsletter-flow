@@ -15,7 +15,7 @@ export default async function OutboxItem({ params }: { params: Promise<{ id: str
     <div className="stack" style={{ gap: 14 }}>
       <div className="crumbs"><Link href="/app/outbox">Outbox</Link> / message</div>
       <div className="card tight"><div><b>{m.subject}</b></div><div className="hint">To {m.to_addr} · {fmtDate(m.created_at, undefined, true)} · {m.kind}</div>{Object.keys(h).length > 0 && <div className="hint mono" style={{ marginTop: 6 }}>{Object.entries(h).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</div>}</div>
-      <iframe title="Email" className="preview-frame" srcDoc={m.html} sandbox="allow-popups" />
+      <iframe title="Email" className="preview-frame" srcDoc={String(m.html).replace(/<img[^>]+\/t\/o\/[^>]+>/g, '')} sandbox="allow-popups" />
     </div>
   );
 }

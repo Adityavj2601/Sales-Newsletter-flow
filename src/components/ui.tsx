@@ -86,21 +86,35 @@ export function Nav({ counts }: { counts: Record<string, number> }) {
 export function ProductSwitch({ products, current, action }: { products: { id: string; name: string; newsletter_name: string }[]; current: string; action: (fd: FormData) => Promise<void> }) {
   const path = usePathname();
   return (
-    <form action={action} className="switch">
+    <form action={action} className="switch" onSubmit={(e) => { const t = e.currentTarget.elements.namedItem('to') as HTMLInputElement; t.value = window.location.pathname + window.location.search; }}>
       <label htmlFor="product-switch">Product</label>
-      <input type="hidden" name="to" value={path} />
-      <select id="product-switch" name="product" defaultValue={current} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
+      <input type="hidden" name="to" defaultValue={path} />
+      <select key={current} id="product-switch" name="product" defaultValue={current} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
         {products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.newsletter_name}</option>)}
       </select>
     </form>
   );
 }
 
+const setMenu = (open: boolean) => {
+  document.querySelector('.side')?.classList.toggle('open', open);
+  document.querySelector('.backdrop')?.classList.toggle('on', open);
+  document.querySelectorAll('[data-menu-toggle]').forEach((b) => b.setAttribute('aria-expanded', String(open)));
+  if (open) (document.querySelector('.side a, .side select') as HTMLElement | null)?.focus();
+};
 export function MobileToggle() {
-  return <button type="button" onClick={() => document.querySelector('.side')?.classList.toggle('open')} aria-label="Open menu">☰ Menu</button>;
+  return <button type="button" data-menu-toggle aria-controls="sidebar" aria-expanded="false" onClick={() => setMenu(!document.querySelector('.side')?.classList.contains('open'))}>☰ Menu</button>;
+}
+export function MenuClose() {
+  return <button type="button" className="side-close" aria-label="Close menu" onClick={() => setMenu(false)}>✕</button>;
 }
 export function CloseOnNav() {
   const path = usePathname();
-  useEffect(() => { document.querySelector('.side')?.classList.remove('open'); }, [path]);
-  return null;
+  useEffect(() => { setMenu(false); }, [path]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(false); };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
+  return <div className="backdrop" onClick={() => setMenu(false)} aria-hidden="true" />;
 }

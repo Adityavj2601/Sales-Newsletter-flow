@@ -17,7 +17,10 @@ export default async function Contacts({ searchParams }: { searchParams: Promise
   let rows = all('SELECT * FROM contacts WHERE product_id = ? ORDER BY created_at DESC', p.id);
   const total = rows.length;
   const tags = [...new Set(rows.flatMap((r) => String(r.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean)))].sort();
-  if (sp.q) rows = rows.filter((r) => `${r.first_name} ${r.last_name} ${r.email} ${r.phone} ${r.company} ${r.city} ${r.role}`.toLowerCase().includes(sp.q!.toLowerCase()));
+  if (sp.q) {
+    const q = sp.q.toLowerCase(), digits = sp.q.replace(/\D/g, '');
+    rows = rows.filter((r) => `${r.first_name} ${r.last_name} ${r.email} ${r.phone} ${r.company} ${r.city} ${r.role}`.toLowerCase().includes(q) || (digits.length >= 5 && String(r.phone || '').replace(/\D/g, '').includes(digits)));
+  }
   if (sp.tag) rows = rows.filter((r) => String(r.tags || '').split(',').map((t: string) => t.trim()).includes(sp.tag!));
   if (sp.consent === 'email') rows = rows.filter((r) => r.email_consent);
   if (sp.consent === 'wa') rows = rows.filter((r) => r.wa_consent);
@@ -27,7 +30,7 @@ export default async function Contacts({ searchParams }: { searchParams: Promise
   return (
     <div className="stack" style={{ gap: 18 }}>
       <div className="ph">
-        <div><div className="eyebrow">{p.name} audience</div><h1>Contacts</h1><p className="sub">{total} contacts. Only people who agreed to hear from you get editions, and consent is stored per channel. Unsubscribes are honoured automatically.</p></div>
+        <div><div className="eyebrow">{p.name} audience</div><h1>Contacts</h1><p className="sub">{total} {total === 1 ? 'contact' : 'contacts'}. Only people who agreed to hear from you get editions, and consent is stored per channel. Unsubscribes are honoured automatically.</p></div>
         <div className="row">
           <a className="btn" href={`/api/export?type=contacts`}>Export CSV</a>
           <Link className="btn" href="/app/contacts?import=1">Import CSV</Link>
@@ -42,16 +45,16 @@ export default async function Contacts({ searchParams }: { searchParams: Promise
       )}
       {total > 0 && <>
         <form className="row">
-          <input className="in" name="q" defaultValue={sp.q} placeholder="Search name, company, city…" style={{ maxWidth: 280 }} />
-          <select className="in" name="tag" defaultValue={sp.tag || ''} style={{ width: 'auto' }}><option value="">All tags</option>{tags.map((t) => <option key={t}>{t}</option>)}</select>
-          <select className="in" name="consent" defaultValue={sp.consent || ''} style={{ width: 'auto' }}><option value="">Any consent</option><option value="email">Email consent</option><option value="wa">WhatsApp consent</option><option value="none">No consent</option></select>
-          <select className="in" name="status" defaultValue={sp.status || ''} style={{ width: 'auto' }}><option value="">Any status</option><option value="active">Active</option><option value="unsubscribed">Unsubscribed</option></select>
+          <input className="in" name="q" aria-label="Search contacts" defaultValue={sp.q} placeholder="Search name, company, city…" style={{ maxWidth: 280 }} />
+          <select className="in" name="tag" aria-label="Tag" defaultValue={sp.tag || ''} style={{ width: 'auto' }}><option value="">All tags</option>{tags.map((t) => <option key={t}>{t}</option>)}</select>
+          <select className="in" name="consent" aria-label="Consent" defaultValue={sp.consent || ''} style={{ width: 'auto' }}><option value="">Any consent</option><option value="email">Email consent</option><option value="wa">WhatsApp consent</option><option value="none">No consent</option></select>
+          <select className="in" name="status" aria-label="Status" defaultValue={sp.status || ''} style={{ width: 'auto' }}><option value="">Any status</option><option value="active">Active</option><option value="unsubscribed">Unsubscribed</option></select>
           <button className="btn">Filter</button>{(sp.q || sp.tag || sp.consent || sp.status) && <Link className="btn ghost" href="/app/contacts">Clear</Link>}
         </form>
         <form action={bulkContacts} className="stack" style={{ gap: 10 }}>
           <div className="row"><span className="hint">{rows.length} shown{rows.length > 500 ? ' (first 500)' : ''}. With selected:</span>
-            <select className="in" name="bulk" style={{ width: 'auto' }}><option value="tag">Add tag</option><option value="unsubscribe">Unsubscribe</option><option value="delete">Delete</option></select>
-            <input className="in" name="tag" placeholder="tag name" style={{ width: 140 }} /><Submit className="btn sm">Apply</Submit></div>
+            <select className="in" name="bulk" aria-label="Bulk action" style={{ width: 'auto' }}><option value="tag">Add tag</option><option value="unsubscribe">Unsubscribe</option><option value="delete">Delete</option></select>
+            <input className="in" name="tag" aria-label="Tag to add" placeholder="tag name" style={{ width: 140 }} /><Submit className="btn sm">Apply</Submit></div>
           <div className="tbl-wrap"><table className="tbl">
             <thead><tr><th></th><th>Name</th><th>Company</th><th>Reach</th><th>Stage</th><th className="num">Score</th><th>Last active</th></tr></thead>
             <tbody>{shown.map((c) => (
@@ -59,7 +62,7 @@ export default async function Contacts({ searchParams }: { searchParams: Promise
                 <td><input type="checkbox" name="ids" value={c.id} aria-label="Select" /></td>
                 <td><Link href={`/app/contacts/${c.id}`}><b>{`${c.first_name} ${c.last_name}`.trim() || '(no name)'}</b></Link><div className="hint">{c.role}{c.city ? ` · ${c.city}` : ''}</div></td>
                 <td>{c.company}<div className="hint">{c.tags}</div></td>
-                <td style={{ fontSize: 12.5 }}>{c.email && <div>{c.email_consent ? '✓' : '✕'} {c.email}</div>}{c.phone && <div>{c.wa_consent ? '✓' : '✕'} {c.phone}</div>}{c.status !== 'active' && <span className="pill bad">{c.status}</span>}</td>
+                <td style={{ fontSize: 12.5 }}>{c.email && <div><span aria-hidden>{c.email_consent ? '✓' : '✕'}</span><span className="sr">{c.email_consent ? 'Email consent' : 'No email consent'}</span> {c.email}</div>}{c.phone && <div><span aria-hidden>{c.wa_consent ? '✓' : '✕'}</span><span className="sr">{c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}</span> {c.phone}</div>}{c.status !== 'active' && <span className="pill bad">{c.status}</span>}</td>
                 <td><StagePill stage={c.stage} /></td>
                 <td className="num"><Score n={c.score} /></td>
                 <td className="hint">{ago(c.last_engaged_at)}</td>

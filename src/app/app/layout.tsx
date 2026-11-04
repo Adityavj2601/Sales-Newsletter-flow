@@ -4,7 +4,7 @@ import { activeProduct } from '@/lib/context';
 import { listProducts, getSetting } from '@/lib/settings';
 import { get } from '@/lib/db';
 import { seedProducts } from '@/lib/seed';
-import { Nav, ProductSwitch, Flash, MobileToggle, CloseOnNav } from '@/components/ui';
+import { Nav, ProductSwitch, Flash, MobileToggle, CloseOnNav, MenuClose } from '@/components/ui';
 import { switchProduct, logout } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -26,8 +26,9 @@ export default async function StudioLayout({ children }: { children: React.React
   const g = getSetting('general');
   return (
     <div className="shell">
-      <aside className="side">
-        <div className="brand"><span className="brand-mark">B</span>{g.appName}</div>
+      <a className="skip" href="#main">Skip to content</a>
+      <aside className="side" id="sidebar" aria-label="Sidebar">
+        <div className="brand"><span className="brand-mark">B</span>{g.appName}<MenuClose /></div>
         {p && <ProductSwitch products={products} current={p.id} action={switchProduct} />}
         <Nav counts={counts} />
         <div className="side-foot">
@@ -37,7 +38,7 @@ export default async function StudioLayout({ children }: { children: React.React
       </aside>
       <div style={{ minWidth: 0 }}>
         <div className="mobile-top"><MobileToggle /><b>{p?.name}</b></div>
-        <main className="main">{children}</main>
+        <main className="main" id="main">{children}</main>
       </div>
       <Suspense><Flash /><CloseOnNav /></Suspense>
     </div>

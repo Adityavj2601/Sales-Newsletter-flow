@@ -2,6 +2,9 @@ import { insert, uid, now } from './db';
 import { getSetting, getProduct, baseUrl } from './settings';
 import { sendMail } from './mailer';
 import { esc } from './render/common';
+import { assertPublicUrl } from './web';
+
+const postJSON = async (url: string, body: any) => { await assertPublicUrl(url); return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); };
 
 export function notify(productId: string | null, kind: string, title: string, body = '', link = '') {
   insert('notifications', { id: uid('n_'), product_id: productId, kind, title, body, link, read_at: null, created_at: now() });
@@ -9,13 +12,13 @@ export function notify(productId: string | null, kind: string, title: string, bo
 
 /** High-intent signal: in-app notification + email + Slack + webhook (each only if configured). Never throws. */
 export async function alertIntent(payload: {
-  productId: string; action: string; label: string; contact: any | null; editionTitle: string; editionId: string; note?: string; extra?: string;
+  productId: string; action: string; label: string; contact: any | null; editionTitle: string; editionId: string; note?: string; extra?: string; link?: string;
 }) {
   const p = getProduct(payload.productId);
   const who = payload.contact ? `${[payload.contact.first_name, payload.contact.last_name].filter(Boolean).join(' ') || payload.contact.email || payload.contact.phone}${payload.contact.company ? ` (${payload.contact.company})` : ''}` : 'An anonymous reader';
-  const title = `🔥 ${who} tapped “${payload.label}”`;
+  const title = payload.action === 'note' ? `📝 ${who} left a note` : `🔥 ${who} tapped “${payload.label}”`;
   const body = `${payload.editionTitle}${payload.extra ? ` · ${payload.extra}` : ''}${payload.note ? ` · Note: “${payload.note}”` : ''}`;
-  const link = payload.contact ? `/app/contacts/${payload.contact.id}` : `/app/editions/${payload.editionId}/analytics`;
+  const link = payload.link || (payload.contact ? `/app/contacts/${payload.contact.id}` : `/app/editions/${payload.editionId}/analytics`);
   notify(payload.productId, 'intent', title, body, link);
   const a = getSetting('alerts');
   const to = [p?.brand.alertEmail, ...a.alertEmails.split(',')].map((s) => (s || '').trim()).filter(Boolean);
@@ -35,7 +38,7 @@ export async function alertIntent(payload: {
       text: `${title}\n${body}\n${contactLines.join('\n')}\n${base}${link}`,
     }).catch(() => null));
   }
-  if (a.slackWebhook) tasks.push(fetch(a.slackWebhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: `${title}\n${body}\n${contactLines.join(' · ')}\n<${base}${link}|Open in Brief Studio>` }) }).catch(() => null));
-  if (a.webhookUrl) tasks.push(fetch(a.webhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ event: 'intent', action: payload.action, label: payload.label, note: payload.note || null, product: p ? { id: p.id, name: p.name } : null, edition: { id: payload.editionId, title: payload.editionTitle }, contact: payload.contact ? { id: payload.contact.id, firstName: payload.contact.first_name, lastName: payload.contact.last_name, email: payload.contact.email, phone: payload.contact.phone, company: payload.contact.company, role: payload.contact.role, city: payload.contact.city, score: payload.contact.score } : null, at: now() }) }).catch(() => null));
+  if (a.slackWebhook) tasks.push(postJSON(a.slackWebhook, { text: `${title}\n${body}\n${contactLines.join(' · ')}\n<${base}${link}|Open in Brief Studio>` }).catch(() => null));
+  if (a.webhookUrl) tasks.push(postJSON(a.webhookUrl, { event: 'intent', action: payload.action, label: payload.label, note: payload.note || null, product: p ? { id: p.id, name: p.name } : null, edition: { id: payload.editionId, title: payload.editionTitle }, contact: payload.contact ? { id: payload.contact.id, firstName: payload.contact.first_name, lastName: payload.contact.last_name, email: payload.contact.email, phone: payload.contact.phone, company: payload.contact.company, role: payload.contact.role, city: payload.contact.city, score: payload.contact.score } : null, at: now() }).catch(() => null));
   await Promise.all(tasks);
 }

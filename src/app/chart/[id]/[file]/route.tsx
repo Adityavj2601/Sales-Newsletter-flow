@@ -1,3 +1,5 @@
+import { imgKey } from '@/lib/crypto';
+import { currentUser } from '@/lib/auth';
 import { ImageResponse } from 'next/og';
 import { getEdition } from '@/lib/editions';
 import { getProduct } from '@/lib/settings';
@@ -10,11 +12,17 @@ const fmt = (v: number, unit: string) => {
 };
 
 /** Static PNG of a chart block for email clients (which can't run SVG/JS). */
-export async function GET(_: Request, { params }: { params: Promise<{ id: string; file: string }> }) {
+
+async function visible(e: { id: string; status: string }, req: Request) {
+  if (e.status === 'sent' || e.status === 'sending') return true;
+  if (new URL(req.url).searchParams.get('k') === imgKey(e.id)) return true;
+  return !!(await currentUser());
+}
+export async function GET(req: Request, { params }: { params: Promise<{ id: string; file: string }> }) {
   const { id, file } = await params;
   const e = getEdition(id);
   const b: any = e?.content.blocks.find((x) => x.id === file.replace(/\.png$/, '') && x.type === 'chart');
-  if (!e || !b) return new Response('Not found', { status: 404 });
+  if (!e || !b || !(await visible(e, req))) return new Response('Not found', { status: 404 });
   const v = brandVars(getProduct(e.product_id)!);
   const max = Math.max(...b.data.map((d: any) => Math.abs(d.value)), 1);
   const top = b.data.reduce((m: number, x: any, i: number) => (x.value > b.data[m].value ? i : m), 0);
@@ -26,7 +34,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         {b.data.map((d: any, i: number) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: `${90 / b.data.length}%` }}>
             <div style={{ fontSize: 26, fontWeight: 700, color: '#20232a' }}>{fmt(d.value, b.unit)}</div>
-            <div style={{ width: '70%', height: Math.max(6, (Math.abs(d.value) / max) * 340), background: i === top ? v.acc : v.ink, opacity: i === top ? 1 : 0.45, borderRadius: 8 }} />
+            <div style={{ width: '70%', height: Math.max(6, (Math.abs(d.value) / max) * 340), background: d.value < 0 ? '#b3261e' : i === top ? v.acc : v.ink, opacity: i === top || d.value < 0 ? 1 : 0.45, borderRadius: 8 }} />
             <div style={{ fontSize: 22, color: '#20232a', textAlign: 'center' }}>{String(d.label).replace(/₹/g, 'Rs ')}</div>
           </div>
         ))}
@@ -36,7 +44,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         {b.data.map((d: any, i: number) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{ width: 300, fontSize: 26, color: '#20232a', display: 'flex', justifyContent: 'flex-end' }}>{String(d.label).replace(/₹/g, 'Rs ')}</div>
-            <div style={{ width: Math.max(8, (Math.abs(d.value) / max) * (W - 520)), height: 40, background: i === top ? v.acc : v.ink, opacity: i === top ? 1 : 0.45, borderRadius: 8 }} />
+            <div style={{ width: Math.max(8, (Math.abs(d.value) / max) * (W - 520)), height: 40, background: d.value < 0 ? '#b3261e' : i === top ? v.acc : v.ink, opacity: i === top || d.value < 0 ? 1 : 0.45, borderRadius: 8 }} />
             <div style={{ fontSize: 26, fontWeight: 700, color: '#20232a' }}>{fmt(d.value, b.unit)}</div>
           </div>
         ))}

@@ -2,7 +2,7 @@ import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
 import { ago } from '@/lib/format';
 import { gnewsUrl } from '@/lib/ingest';
-import { Submit } from '@/components/ui';
+import { Submit, Confirm } from '@/components/ui';
 import { addSource, toggleSource, deleteSource } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +32,7 @@ export default async function Sources() {
             <td>{r.product_id ? p.name : 'All products'}</td>
             <td className="hint">{ago(r.last_fetched_at)}</td>
             <td>{r.last_error ? <span className="pill bad" title={r.last_error}>Failed: {String(r.last_error).slice(0, 40)}</span> : r.last_fetched_at ? <span className="pill ok">{r.last_count ?? 0} new</span> : <span className="hint">not read yet</span>}</td>
-            <td><div className="row end"><form action={toggleSource.bind(null, r.id)}><button className="btn sm">{r.active ? 'Pause' : 'Resume'}</button></form><form action={deleteSource.bind(null, r.id)}><button className="btn sm ghost">Delete</button></form></div></td>
+            <td><div className="row end"><form action={toggleSource.bind(null, r.id)}><button className="btn sm">{r.active ? 'Pause' : 'Resume'}</button></form><Confirm action={deleteSource.bind(null, r.id)} label="Delete" confirmLabel={r.product_id ? 'Yes, delete' : 'Delete for all products'} className="btn sm ghost" /></div></td>
           </tr>
         ))}</tbody>
       </table></div>

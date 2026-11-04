@@ -5,7 +5,8 @@ import { all, get } from '@/lib/db';
 import { getEdition } from '@/lib/editions';
 import { getProduct, baseUrl } from '@/lib/settings';
 import { CTA_LABELS } from '@/lib/types';
-import { fmtDate, ago, pct } from '@/lib/format';
+import { fmtDate, ago } from '@/lib/format';
+import { editionMetrics, pollResults, pct } from '@/lib/metrics';
 import { StatusPill, Score } from '@/components/bits';
 
 export const dynamic = 'force-dynamic';
@@ -21,21 +22,13 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
   const e = getEdition(id);
   if (!e) notFound();
   const p = getProduct(e.product_id)!;
-  const n = (sql: string, ...a: any[]) => Number(get(sql, ...a)?.n || 0);
-  const delivered = n("SELECT COUNT(*) AS n FROM deliveries WHERE edition_id = ? AND channel <> 'test' AND status NOT IN ('failed','queued')", id);
-  const failed = n("SELECT COUNT(*) AS n FROM deliveries WHERE edition_id = ? AND status = 'failed'", id);
-  const byChannel = all("SELECT channel, COUNT(*) AS n FROM deliveries WHERE edition_id = ? AND channel <> 'test' AND status NOT IN ('failed','queued') GROUP BY channel", id);
-  const opens = n("SELECT COUNT(DISTINCT delivery_id) AS n FROM events WHERE edition_id = ? AND type = 'open' AND delivery_id IS NOT NULL", id);
-  const viewers = n("SELECT COUNT(DISTINCT delivery_id) AS n FROM events WHERE edition_id = ? AND type = 'view' AND delivery_id IS NOT NULL", id);
-  const anon = n("SELECT COUNT(*) AS n FROM events WHERE edition_id = ? AND type = 'view' AND delivery_id IS NULL", id);
-  const s50 = n("SELECT COUNT(DISTINCT COALESCE(delivery_id, id)) AS n FROM events WHERE edition_id = ? AND type = 'scroll' AND value IN ('50','75','100')", id);
-  const s100 = n("SELECT COUNT(DISTINCT COALESCE(delivery_id, id)) AS n FROM events WHERE edition_id = ? AND type = 'scroll' AND value = '100'", id);
-  const avgTime = Math.round(Number(get("SELECT AVG(CAST(value AS INTEGER)) AS n FROM events WHERE edition_id = ? AND type = 'time' AND CAST(value AS INTEGER) BETWEEN 3 AND 1800", id)?.n || 0));
-  const ctas = all("SELECT type, COUNT(DISTINCT COALESCE(delivery_id, id)) AS n FROM events WHERE edition_id = ? AND type IN ('interested','book','more','share','notnow','unsubscribe') GROUP BY type", id);
-  const ctaMap: Record<string, number> = Object.fromEntries(ctas.map((r) => [r.type, r.n]));
-  const intents = (ctaMap.interested || 0) + (ctaMap.book || 0);
-  const show = all("SELECT value, COUNT(DISTINCT COALESCE(delivery_id, id)) AS n FROM events WHERE edition_id = ? AND type = 'showcase' GROUP BY value ORDER BY n DESC", id);
-  const polls = all("SELECT value, COUNT(DISTINCT COALESCE(delivery_id, id)) AS n FROM events WHERE edition_id = ? AND type = 'poll' GROUP BY value ORDER BY n DESC", id);
+  const m = editionMetrics([id]);
+  const { delivered, failed, opens, halfway: s50, finished: s100, avgTime, cta: ctaMap } = m;
+  const viewers = m.readers;
+  const anon = m.anonViews;
+  const byChannel = Object.entries(m.byChannel).map(([channel, n]) => ({ channel, n }));
+  const intents = m.intentPeople;
+  const show = m.showcase;
   const pollBlocks = e.content.blocks.filter((b) => b.type === 'poll') as any[];
   const people = all(`SELECT c.id, c.first_name, c.last_name, c.company, c.role, c.score, c.stage,
       GROUP_CONCAT(DISTINCT ev.type) AS acts, MAX(ev.created_at) AS last
@@ -58,7 +51,7 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
         <div className="card kpi"><div className="v">{delivered}</div><div className="k">Delivered</div><div className="d">{byChannel.map((c) => `${({ email: 'email', whatsapp: 'WA API', wa_manual: 'WA manual' } as any)[c.channel] || c.channel} ${c.n}`).join(' · ') || '–'}{failed ? ` · ${failed} failed` : ''}</div></div>
         <div className="card kpi"><div className="v">{viewers}</div><div className="k">Opened the page</div><div className="d">{pct(viewers, delivered)} of delivered{anon ? ` · +${anon} views via shared link` : ''}</div></div>
         <div className="card kpi"><div className="v">{s50}</div><div className="k">Read past halfway</div><div className="d">{s100} reached the end{avgTime ? ` · avg ${avgTime}s on page` : ''}</div></div>
-        <div className="card kpi"><div className="v">{intents + show.reduce((a, s) => a + s.n, 0)}</div><div className="k">Interest taps</div><div className="d">{pct(intents, viewers)} of readers · email opens {opens} (approximate)</div></div>
+        <div className="card kpi"><div className="v">{intents}</div><div className="k">People who showed interest</div><div className="d">{pct(intents, delivered)} of delivered · email opens {opens} (approximate)</div></div>
       </div>
       <div className="grid2">
         <section className="card"><h2>Buttons tapped</h2><p className="hint">Unique people per button.</p>
@@ -69,8 +62,9 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
         </section>
         <section className="card"><h2>Poll</h2>
           {pollBlocks.length ? pollBlocks.map((b) => {
-            const total = polls.reduce((a, x) => a + x.n, 0);
-            return <div key={b.id} className="stack" style={{ gap: 8 }}><p className="hint">{b.question}</p>{b.options.map((o: string) => <Bar key={o} label={o} n={polls.find((x) => x.value === o)?.n || 0} max={Math.max(1, ...polls.map((x) => x.n))} total={total} />)}<div className="hint">{total} vote(s)</div></div>;
+            const res = pollResults(id, b.id);
+            const total = res.reduce((a, x) => a + x.n, 0);
+            return <div key={b.id} className="stack" style={{ gap: 8 }}><p className="hint">{b.question}</p>{b.options.map((o: string) => <Bar key={o} label={o} n={res.find((x) => x.value === o)?.n || 0} max={Math.max(1, ...res.map((x) => x.n))} total={total} />)}<div className="hint">{total} {total === 1 ? 'person' : 'people'} voted (latest answer counts)</div></div>;
           }) : <div className="hint">This edition has no poll.</div>}
         </section>
       </div>

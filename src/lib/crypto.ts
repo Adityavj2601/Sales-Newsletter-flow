@@ -39,7 +39,7 @@ export function decrypt(blob: string | null | undefined): string {
     return '';
   }
 }
-export const mask = (s: string) => (s ? `${s.slice(0, 4)}…${s.slice(-4)}` : '');
+export const mask = (s: string) => (!s ? '' : s.length <= 12 ? '••••••••' : `${s.slice(0, 4)}…${s.slice(-4)}`);
 
 export function hashPassword(pw: string): string {
   const salt = crypto.randomBytes(16);
@@ -49,8 +49,8 @@ export function hashPassword(pw: string): string {
 export function verifyPassword(pw: string, stored: string): boolean {
   const [v, salt, key] = stored.split('$');
   if (v !== 's1') return false;
-  const k = crypto.scryptSync(pw, Buffer.from(salt, 'base64url'), 32);
-  const want = Buffer.from(key, 'base64url');
+  const k = crypto.scryptSync(pw, Buffer.from(salt || '', 'base64url'), 32);
+  const want = Buffer.from(key || '', 'base64url');
   return k.length === want.length && crypto.timingSafeEqual(k, want);
 }
 
@@ -72,3 +72,11 @@ export function unsign<T = any>(tok: string | undefined): T | null {
   }
 }
 export const sha1 = (s: string) => crypto.createHash('sha1').update(s).digest('hex');
+
+/** Short signature binding a tracked-click URL to a delivery token (prevents open redirects). */
+export function linkSig(tok: string, url: string): string {
+  return crypto.createHmac('sha256', appSecret()).update(`${tok}|${url}`).digest('base64url').slice(0, 16);
+}
+
+/** Key that lets image routes render an unsent edition (preview cards, email charts in test sends). */
+export const imgKey = (editionId: string) => linkSig('img', editionId);

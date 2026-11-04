@@ -18,7 +18,7 @@ type Item = { url: string; title: string; summary: string; publisher: string; pu
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@', textNodeName: '#text', processEntities: true });
 const txt = (v: any): string => (v == null ? '' : typeof v === 'string' ? v : typeof v === 'number' ? String(v) : v['#text'] ? String(v['#text']) : '');
 
-export function parseFeed(body: string): Item[] {
+export function parseFeed(body: string, isGnews = false): Item[] {
   const doc = xml.parse(body);
   const rssItems = doc?.rss?.channel?.item ?? doc?.['rdf:RDF']?.item;
   const atomItems = doc?.feed?.entry;
@@ -34,10 +34,14 @@ export function parseFeed(body: string): Item[] {
     let publisher = txt(it.source) || txt(it['dc:creator']) || '';
     let cleanTitle = title;
     // Google News titles end with " - Publisher"
-    const m = title.match(/^(.*)\s+-\s+([^-]{2,60})$/);
-    if (m && (!publisher || publisher === m[2])) { cleanTitle = m[1]; publisher = publisher || m[2]; }
+    // Split "Title - Publisher" only for Google News, or when the suffix is the item's <source>.
+    const cut = title.lastIndexOf(' - ');
+    if (cut > 0) {
+      const suffix = title.slice(cut + 3).trim();
+      if ((isGnews && suffix.length <= 60) || (publisher && publisher === suffix)) { cleanTitle = title.slice(0, cut); publisher = publisher || suffix; }
+    }
     let summary = stripTags(rawSummary);
-    if (summary.startsWith(cleanTitle)) summary = summary.slice(cleanTitle.length).replace(/^\s*[-–]?\s*/, '');
+    if (summary.startsWith(cleanTitle)) summary = summary.slice(cleanTitle.length).replace(/^\s*[-–—.:|]+\s*/, '');
     if (summary.length < 30 || summary === publisher) summary = '';
     const pub = txt(it.pubDate) || txt(it.published) || txt(it.updated) || txt(it['dc:date']);
     const d = pub ? new Date(pub) : null;
@@ -56,7 +60,8 @@ export async function ingestProduct(productId: string, log: (s: string) => void 
     try {
       const res = await fetchText(url, 15000);
       if (res.status >= 400) throw new Error(`HTTP ${res.status}`);
-      const items = parseFeed(res.text).slice(0, 40);
+      const items = parseFeed(res.text, s.kind === 'gnews').slice(0, 40);
+      if (!items.length && !/<(rss|feed|rdf:RDF)[\s>]/i.test(res.text)) throw new Error('Not a valid RSS or Atom feed');
       let n = 0;
       const cutoff = Date.now() - 21 * 86400_000;
       for (const it of items) {
@@ -72,7 +77,8 @@ export async function ingestProduct(productId: string, log: (s: string) => void 
       update('sources', s.id, { last_fetched_at: now(), last_error: null, last_count: n });
       log(`✓ ${s.name}: ${items.length} items, ${n} new`);
     } catch (e: any) {
-      const msg = e?.name === 'AbortError' ? 'Timed out' : String(e?.message || e);
+      const code = e?.cause?.code ? ` (${e.cause.code})` : '';
+      const msg = e?.name === 'AbortError' ? 'Timed out' : `${String(e?.message || e)}${code}`;
       update('sources', s.id, { last_fetched_at: now(), last_error: msg });
       log(`✕ ${s.name}: ${msg}`);
     }
@@ -125,18 +131,33 @@ export async function scoreStories(p: Product, log: (s: string) => void = () => 
 }
 
 /** Add one story by URL (manual). */
+const normUrl = (u: string) => {
+  try {
+    const x = new URL(u);
+    for (const k of [...x.searchParams.keys()]) if (/^(utm_|fbclid|gclid|mc_|ref$|ref_)/i.test(k)) x.searchParams.delete(k);
+    x.hash = '';
+    return x.toString().replace(/\/$/, '');
+  } catch { return u; }
+};
+
+/** Add one story by URL (manual). Re-adding a story that's already in the pool just shortlists it. */
 export async function addStoryByUrl(productId: string, url: string) {
-  const res = await fetchText(url, 12000);
+  const clean = normUrl(url.trim());
+  const bare = clean.replace(/[?#].*$/, '');
+  const dupe = get('SELECT id FROM stories WHERE product_id = ? AND (url = ? OR url = ? OR url LIKE ?)', productId, clean, bare, `${bare}?%`);
+  if (dupe) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ? AND status <> 'used'", dupe.id); return dupe.id as string; }
+  const res = await fetchText(clean, 12000);
   if (res.status >= 400) throw new Error(`Could not open that page (HTTP ${res.status}).`);
-  const title = pageTitle(res.text) || url;
+  const finalUrl = normUrl(res.finalUrl);
+  const title = pageTitle(res.text) || finalUrl;
   const summary = meta(res.text, 'description') || meta(res.text, 'og:description');
   const content = readableText(res.text, 6000);
-  const hash = sha1(url.replace(/[?#].*$/, '') + '|' + title.toLowerCase().slice(0, 80));
-  const existing = get('SELECT id FROM stories WHERE product_id = ? AND url_hash = ?', productId, hash);
-  if (existing) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ?", existing.id); return existing.id as string; }
+  const hash = sha1(finalUrl.replace(/[?#].*$/, '') + '|' + title.toLowerCase().slice(0, 80));
+  const existing = get('SELECT id FROM stories WHERE product_id = ? AND (url_hash = ? OR url = ? OR lower(title) = lower(?))', productId, hash, finalUrl, title);
+  if (existing) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ? AND status <> 'used'", existing.id); return existing.id as string; }
   const id = uid('st_');
   const h = heuristicScore(title, summary);
-  const host = new URL(res.finalUrl).hostname.replace(/^www\./, '');
-  insert('stories', { id, product_id: productId, source_id: null, url: res.finalUrl, url_hash: hash, title, summary, content, publisher: meta(res.text, 'og:site_name') || host, published_at: meta(res.text, 'article:published_time') || null, score: Math.max(h.score, 60), score_reason: 'Added by you', status: 'shortlisted', used_in: null, created_at: now() });
+  const host = new URL(finalUrl).hostname.replace(/^www\./, '');
+  insert('stories', { id, product_id: productId, source_id: null, url: finalUrl, url_hash: hash, title, summary, content, publisher: meta(res.text, 'og:site_name') || host, published_at: meta(res.text, 'article:published_time') || null, score: Math.max(h.score, 60), score_reason: 'Added by you', status: 'shortlisted', used_in: null, created_at: now() });
   return id;
 }

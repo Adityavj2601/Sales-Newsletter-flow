@@ -5,6 +5,7 @@ import { listEditions, pickKb, pickStories } from '@/lib/editions';
 import { baseUrl, getSetting } from '@/lib/settings';
 import { configuredProviders } from '@/lib/ai/providers';
 import { fmtDay, ago, nextSendDate } from '@/lib/format';
+import { editionMetrics } from '@/lib/metrics';
 import { StatusPill } from '@/components/bits';
 import { NewEdition } from './NewEdition';
 
@@ -20,10 +21,7 @@ export default async function Editions({ searchParams }: { searchParams: Promise
   const kb = all('SELECT id, title, pillar, status FROM kb_items WHERE product_id = ? AND active = 1 ORDER BY pillar, title', p.id);
   const preKb = pickKb(p.id).map((k) => k.id);
   const planned = nextSendDate(getSetting('general'), eds.map((e) => e.planned_for));
-  const stat = (id: string) => get(`SELECT
-      (SELECT COUNT(*) FROM deliveries WHERE edition_id = ? AND channel <> 'test' AND status NOT IN ('failed','queued')) AS sent,
-      (SELECT COUNT(DISTINCT COALESCE(delivery_id, id)) FROM events WHERE edition_id = ? AND type = 'view') AS views,
-      (SELECT COUNT(*) FROM events WHERE edition_id = ? AND type IN ('interested','book','showcase')) AS intents`, id, id, id) || {};
+  const stat = (id: string) => { const m = editionMetrics([id]); return { sent: m.delivered, views: m.readers, intents: m.intentPeople }; };
   return (
     <div className="stack" style={{ gap: 18 }}>
       <div className="ph">
@@ -40,7 +38,7 @@ export default async function Editions({ searchParams }: { searchParams: Promise
               return (
                 <tr key={e.id}>
                   <td className="mono">{String(e.number).padStart(2, '0')}</td>
-                  <td style={{ minWidth: 260 }}><Link href={`/app/editions/${e.id}`}><b>{e.content.title || 'Untitled'}</b></Link><div className="hint">{e.content.kicker}{e.checks && e.status !== 'sent' ? ` · ${fails ? `${fails} failing check${fails > 1 ? 's' : ''}` : 'checks pass'}` : ''} · edited {ago(e.updated_at)}</div></td>
+                  <td style={{ minWidth: 260 }}><Link href={`/app/editions/${e.id}`}><b>{e.content.title || 'Untitled'}</b></Link><div className="hint">{[e.content.kicker, e.checks && e.status !== 'sent' ? (fails ? `${fails} failing check${fails > 1 ? 's' : ''}` : 'checks pass') : '', `edited ${ago(e.updated_at)}`].filter(Boolean).join(' · ')}</div></td>
                   <td><StatusPill status={e.status} /></td>
                   <td>{e.status === 'sent' ? fmtDay(e.sent_at) : e.scheduled_at ? fmtDay(e.scheduled_at) : fmtDay(e.planned_for)}</td>
                   <td className="num">{s ? s.sent : '–'}</td><td className="num">{s ? s.views : '–'}</td><td className="num">{s ? s.intents : '–'}</td>

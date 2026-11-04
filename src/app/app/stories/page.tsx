@@ -30,12 +30,12 @@ export default async function Stories({ searchParams }: { searchParams: Promise<
         </div>
       </div>
       <form action={addStory} className="card tight row">
-        <input className="in" style={{ flex: 1, minWidth: 240 }} type="url" name="url" required placeholder="Paste any article URL to add it to your shortlist" />
+        <input className="in" aria-label="Article URL" style={{ flex: 1, minWidth: 220 }} type="url" name="url" required placeholder="Paste any article URL to add it to your shortlist" />
         <Submit className="btn" pending="Reading…">Add story</Submit>
       </form>
       <div className="row">
-        <div className="tabs" style={{ marginBottom: 0, flex: 1 }}>{FILTERS.map(([k, l]) => <Link key={k} href={`/app/stories?f=${k}`} aria-current={f === k ? 'page' : undefined}>{l}</Link>)}</div>
-        <form className="row"><input type="hidden" name="f" value={f} /><input className="in" name="q" defaultValue={sp.q} placeholder="Search" style={{ width: 200 }} /></form>
+        <div className="tabs" style={{ marginBottom: 0, flex: 1 }}>{FILTERS.map(([k, l]) => <Link key={k} href={`/app/stories?f=${k}${sp.q ? `&q=${encodeURIComponent(sp.q)}` : ''}`} aria-current={f === k ? 'page' : undefined}>{l}</Link>)}</div>
+        <form className="row"><input type="hidden" name="f" value={f} /><input className="in" name="q" aria-label="Search stories" defaultValue={sp.q} placeholder="Search" style={{ width: 200, maxWidth: '100%' }} /></form>
       </div>
       {rows.length ? (
         <div className="tbl-wrap"><table className="tbl">

@@ -1,8 +1,19 @@
-/** RFC-4180-ish CSV parser (quotes, escaped quotes, CRLF, BOM). */
+/** The delimiter used by the header line: whichever of , ; or tab appears most outside quotes. */
+function detectDelimiter(t: string): string {
+  const line = t.split(/\r?\n/)[0] || '';
+  const counts: Record<string, number> = { ',': 0, ';': 0, '\t': 0 };
+  let q = false;
+  for (const ch of line) { if (ch === '"') q = !q; else if (!q && ch in counts) counts[ch]++; }
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return best[1] > 0 ? best[0] : ',';
+}
+
+/** RFC-4180-ish CSV parser (quotes, escaped quotes, CRLF, BOM); one delimiter per file. */
 export function parseCSV(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [], cell = '', q = false;
   const t = text.replace(/^﻿/, '');
+  const delim = detectDelimiter(t);
   for (let i = 0; i < t.length; i++) {
     const ch = t[i];
     if (q) {
@@ -10,7 +21,7 @@ export function parseCSV(text: string): string[][] {
       else if (ch === '"') q = false;
       else cell += ch;
     } else if (ch === '"') q = true;
-    else if (ch === ',' || ch === ';' || ch === '\t') { row.push(cell); cell = ''; }
+    else if (ch === delim) { row.push(cell); cell = ''; }
     else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && t[i + 1] === '\n') i++;
       row.push(cell); cell = '';
@@ -25,7 +36,8 @@ export function parseCSV(text: string): string[][] {
 
 export function toCSV(rows: (string | number | null | undefined)[][]): string {
   return rows.map((r) => r.map((v) => {
-    const s = v == null ? '' : String(v);
+    let s = v == null ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; // stop spreadsheet formula injection
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(',')).join('\r\n');
 }

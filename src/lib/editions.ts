@@ -69,7 +69,7 @@ export function saveContent(id: string, content: EditionContent, opts: { author?
 export type DraftInput = { storyIds?: string[]; kbIds?: string[]; brief?: string; plannedFor?: string };
 
 export function pickStories(productId: string, ids?: string[]) {
-  if (ids?.length) return all(`SELECT * FROM stories WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids);
+  if (ids) return ids.length ? all(`SELECT * FROM stories WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids) : [];
   const shortlisted = all("SELECT * FROM stories WHERE product_id = ? AND status = 'shortlisted' ORDER BY score DESC LIMIT 6", productId);
   if (shortlisted.length >= 3) return shortlisted;
   const fresh = all("SELECT * FROM stories WHERE product_id = ? AND status IN ('new','shortlisted') AND created_at >= ? ORDER BY score DESC LIMIT 6", productId, new Date(Date.now() - 10 * 86400_000).toISOString());
@@ -77,7 +77,7 @@ export function pickStories(productId: string, ids?: string[]) {
 }
 /** Rotate "Our work" items: least recently featured first, at most two pillars per edition. */
 export function pickKb(productId: string, ids?: string[]) {
-  if (ids?.length) return all(`SELECT * FROM kb_items WHERE id IN (${ids.map(() => '?').join(',')}) AND active = 1`, ...ids);
+  if (ids) return ids.length ? all(`SELECT * FROM kb_items WHERE id IN (${ids.map(() => '?').join(',')}) AND active = 1`, ...ids) : []; // [] = none chosen; undefined = pick automatically
   const items = all('SELECT * FROM kb_items WHERE product_id = ? AND active = 1 ORDER BY COALESCE(last_featured_at, \'\') ASC, times_featured ASC, created_at DESC', productId);
   const lastEd = get('SELECT content FROM editions WHERE product_id = ? ORDER BY number DESC LIMIT 1', productId);
   const lastPillars = new Set(normalizeContent(parse(lastEd?.content, {})).blocks.filter((b) => b.type === 'showcase').map((b: any) => b.pillar));
@@ -99,7 +99,7 @@ export async function draftEdition(productId: string, input: DraftInput, author:
   const p = getProduct(productId);
   if (!p) throw new Error('Product not found');
   const stories = pickStories(p.id, input.storyIds);
-  if (!stories.length) throw new Error('The story pool is empty. Fetch news on the Stories page (or add a story by URL) first.');
+  if (!stories.length) throw new Error('The story pool is empty. Fetch news on the Story pool page (or add a story by URL) first.');
   const kb = pickKb(p.id, input.kbIds);
   const recent = all('SELECT content FROM editions WHERE product_id = ? ORDER BY number DESC LIMIT 4', p.id).map((r) => normalizeContent(parse(r.content, {})).title).filter(Boolean);
   const n = nextNumber(p.id);
@@ -146,7 +146,9 @@ Write the edition JSON now.`;
     content.blocks.splice(at < 0 ? content.blocks.length : at, 0, demoPlaceholderShowcase('feature', p.name));
   }
   const e = createEdition(p.id, content, mode === 'ai' ? 'ai' : 'demo', mode === 'ai' ? `AI draft (${model})` : 'Demo draft (no AI key yet)', planned);
-  for (const s of stories) run("UPDATE stories SET status = 'used', used_in = ? WHERE id = ?", e.id, s.id);
+  // Only stories the edition actually cites leave the pool.
+  const cited = new Set(e.content.blocks.flatMap((b: any) => b.sourceIds || []).map((sid: string) => e.content.sources.find((x) => x.id === sid)?.url).filter(Boolean));
+  for (const s of stories) if (cited.has(s.url)) run("UPDATE stories SET status = 'used', used_in = ? WHERE id = ?", e.id, s.id);
   return { edition: e, mode, model };
 }
 
@@ -189,8 +191,8 @@ export function duplicateEdition(id: string, author: string) {
   return createEdition(e.product_id, c, author, `Copied from #${e.number}`);
 }
 
-export function blankEdition(productId: string, author: string) {
-  return createEdition(productId, emptyContent(), author, 'Blank edition');
+export function blankEdition(productId: string, author: string, plannedFor?: string) {
+  return createEdition(productId, emptyContent(), author, 'Blank edition', plannedFor || undefined);
 }
 
 export const pillarLabel = (k: string) => (PILLARS as any)[k]?.label || k;

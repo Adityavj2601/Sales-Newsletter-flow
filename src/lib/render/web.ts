@@ -1,7 +1,8 @@
+import { imgKey } from '../crypto';
 import type { Product } from '../settings';
 import type { Edition } from '../editions';
 import { CTA_LABELS, PILLARS, type Block, type EditionContent } from '../types';
-import { esc, paras, brandVars, onColor, youTubeId, vimeoId, sourceLine, wordmark } from './common';
+import { esc, paras, brandVars, onColor, readableOn, youTubeId, vimeoId, sourceLine, wordmark } from './common';
 import { chartSVG } from './chart';
 import { fmtDate } from '../format';
 
@@ -23,7 +24,8 @@ a{color:inherit}img,video,iframe{max-width:100%}
 .hero p{margin:0;opacity:.88;font-size:17px}
 .rt{font:12px "IBM Plex Mono",monospace;opacity:.7;margin-top:14px}
 .sec{padding:24px 20px;border-bottom:1px solid var(--line)}
-.lbl{color:var(--acc);display:block;margin-bottom:10px}
+.lbl{color:var(--acc-text);display:block;margin-bottom:10px}
+.soft .lbl{color:var(--acc-text-soft)}
 .soft{background:var(--soft)}
 .tldr ul{margin:0;padding-left:20px;display:grid;gap:8px}
 .stat .big{font:600 clamp(48px,14vw,72px)/1 "Newsreader",Georgia,serif;color:var(--ink);letter-spacing:-.01em}
@@ -38,7 +40,7 @@ p{margin:0 0 12px}
 .chart svg{width:100%;height:auto;overflow:visible}.chart .bar{transition:opacity .15s}.chart g:hover .bar{opacity:.75}
 .card{border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;background:var(--paper)}
 .card+.card{margin-top:14px}
-.card .pl{font:500 11px "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--acc)}
+.card .pl{font:500 11px "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--acc-text)}
 .card h3{font:600 20px/1.25 "Newsreader",Georgia,serif;color:var(--ink);margin:0}
 .card img,.card video{border-radius:8px;width:100%;display:block}
 .pill{justify-self:start;border:1.5px solid var(--ink);color:var(--ink);background:var(--paper);border-radius:999px;padding:9px 16px;font-weight:600;font-size:14.5px;text-decoration:none;cursor:pointer}
@@ -53,11 +55,12 @@ blockquote{margin:0;font:500 22px/1.35 "Newsreader",Georgia,serif;color:var(--in
 .ctas a.primary{grid-column:1/-1;background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 .ctas a:hover{border-color:var(--ink)}
 .sources ol{margin:0;padding-left:20px;font-size:13.5px;color:var(--muted);display:grid;gap:6px}.sources a{color:var(--muted);word-break:break-word}
-.foot{padding:22px 20px 90px;background:var(--soft);font-size:13px;color:var(--muted);display:grid;gap:8px}.foot .links{display:flex;flex-wrap:wrap;gap:14px}
+.foot{padding:22px 20px 90px;background:var(--soft);font-size:13px;color:var(--muted);display:grid;gap:8px}.foot .links{display:flex;flex-wrap:wrap;gap:6px 18px}.foot .links a{display:inline-block;padding:6px 0;min-height:32px}
+.src a{display:inline-block;padding:4px 0}
 .sticky{position:fixed;left:0;right:0;bottom:0;transform:translateY(110%);transition:transform .25s;z-index:5;padding:10px max(16px,env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom))}
 .sticky.on{transform:none}
 .sticky .in{max-width:648px;margin:0 auto;background:var(--ink);color:var(--on-ink);border-radius:14px;padding:10px 10px 10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-.sticky a{background:var(--acc);color:var(--on-acc);text-decoration:none;font-weight:600;border-radius:999px;padding:9px 16px;white-space:nowrap}
+.sticky a{background:var(--acc-btn);color:var(--on-acc-btn);text-decoration:none;font-weight:600;border-radius:999px;padding:9px 16px;white-space:nowrap}
 .toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:9;display:none;max-width:90vw}
 .pv{background:#fff5d6;color:#5b4300;font:13px "IBM Plex Sans",sans-serif;padding:8px 14px;text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -87,8 +90,8 @@ export function blockHTML(b: Block, c: EditionContent, e: Edition, p: Product, c
     }
     case 'video': {
       const yt = youTubeId(b.url), vm = vimeoId(b.url);
-      const player = yt ? `<iframe src="https://www.youtube-nocookie.com/embed/${yt}?rel=0" title="${esc(b.caption || 'Video')}" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>`
-        : vm ? `<iframe src="https://player.vimeo.com/video/${vm}" title="${esc(b.caption || 'Video')}" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen></iframe>`
+      const player = yt ? `<iframe src="https://www.youtube-nocookie.com/embed/${yt}?rel=0" title="${esc(b.caption || 'Video')}" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"></iframe>`
+        : vm ? `<iframe src="https://player.vimeo.com/video/${vm}" title="${esc(b.caption || 'Video')}" loading="lazy" allow="fullscreen; picture-in-picture"></iframe>`
         : `<video src="${esc(b.url)}" controls playsinline preload="metadata"></video>`;
       return `<section class="sec"><span class="lbl">Watch</span><div class="vid">${player}</div>${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ''}</section>`;
     }
@@ -99,7 +102,7 @@ export function blockHTML(b: Block, c: EditionContent, e: Edition, p: Product, c
     case 'text':
       return `<section class="sec">${b.heading ? `<h2>${esc(b.heading)}</h2>` : ''}${paras(b.body)}</section>`;
     case 'poll':
-      return `<section class="sec"><span class="lbl">Quick poll · one tap</span><p style="font-weight:600">${esc(b.question)}</p><div class="poll" data-poll="${esc(b.id)}">${b.options.filter(Boolean).map((o) => `<button type="button" aria-pressed="false" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div><div class="note" hidden>Thanks, noted.</div></section>`;
+      return `<section class="sec"><span class="lbl">Quick poll · one tap</span><p style="font-weight:600" id="q-${esc(b.id)}">${esc(b.question)}</p><div class="poll" role="group" aria-labelledby="q-${esc(b.id)}" data-poll="${esc(b.id)}">${b.options.filter(Boolean).map((o) => `<button type="button" aria-pressed="false" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div><div class="note" hidden>Thanks, noted.</div></section>`;
     case 'cta': {
       const acts = b.actions.map((a, i) => {
         const href = a === 'share' ? '#share' : linkFor(ctx, e.id, a);
@@ -115,7 +118,7 @@ export function renderWeb(e: Edition, p: Product, ctx: WebCtx): string {
   const v = brandVars(p);
   const [w1, w2] = wordmark(p);
   const url = `${ctx.base}/e/${p.slug}/${e.slug}`;
-  const og = `${ctx.base}/og/${e.id}.png?v=${encodeURIComponent(e.updated_at)}`;
+  const og = `${ctx.base}/og/${e.id}.png?v=${encodeURIComponent(e.updated_at)}&k=${imgKey(e.id)}`;
   const date = fmtDate(e.sent_at || e.scheduled_at || e.planned_for || e.created_at, ctx.tz);
   // Showcase cards are grouped into one section.
   const parts: string[] = [];
@@ -145,7 +148,7 @@ ${ctx.preview ? '<meta name="robots" content="noindex">' : ''}
 <link rel="canonical" href="${esc(url)}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
-<style>:root{--ink:${v.ink};--acc:${v.acc};--soft:${v.soft};--on-ink:${onColor(v.ink)};--on-acc:${onColor(v.acc)};--acc-on-ink:${onColor(v.ink) === '#ffffff' ? v.acc : v.ink};--paper:#fff;--page:#f3f4f6;--text:#20232a;--muted:#626a76;--line:#e3e6eb}${CSS}</style>
+<style>:root{--ink:${v.ink};--acc:${v.acc};--soft:${v.soft};--on-ink:${onColor(v.ink)};--on-acc:${onColor(v.acc)};--acc-on-ink:${readableOn(v.acc, v.ink, 3)};--acc-text:${readableOn(v.acc, '#ffffff')};--acc-text-soft:${readableOn(v.acc, v.soft)};--acc-btn:${readableOn(v.acc, '#ffffff', 4.5)};--on-acc-btn:${onColor(readableOn(v.acc, '#ffffff', 4.5))};--paper:#fff;--page:#f3f4f6;--text:#20232a;--muted:#626a76;--line:#e3e6eb}${CSS}</style>
 </head><body>
 ${ctx.preview ? '<div class="pv">Preview. Taps here are not recorded.</div>' : ''}
 <div class="wrap">
@@ -164,8 +167,8 @@ function send(type,value,meta){if(C.preview)return;try{var b=JSON.stringify({e:C
 function toast(t){var el=document.getElementById('toast');el.textContent=t;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(function(){el.style.display='none'},2600)}
 send('view',null,{ref:document.referrer||null});
 var marks=[25,50,75,100],hit={},st=document.getElementById('sticky'),t0=Date.now();
-function onScroll(){var h=document.documentElement,p=Math.round((h.scrollTop+window.innerHeight)/h.scrollHeight*100);marks.forEach(function(m){if(p>=m&&!hit[m]){hit[m]=1;send('scroll',String(m))}});if(st){st.classList.toggle('on',p>45&&p<92)}}
-window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+function onScroll(ev){var h=document.documentElement,p=Math.round((h.scrollTop+window.innerHeight)/h.scrollHeight*100);if(ev&&h.scrollTop>40){marks.forEach(function(m){if(p>=m&&!hit[m]){hit[m]=1;send('scroll',String(m))}})}if(st){st.classList.toggle('on',p>45&&p<92)}}
+window.addEventListener('scroll',onScroll,{passive:true});onScroll(null);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'){send('time',String(Math.round((Date.now()-t0)/1000)))}});
 document.querySelectorAll('[data-poll]').forEach(function(g){g.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){g.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});g.nextElementSibling.hidden=false;send('poll',b.getAttribute('data-v'),{block:g.getAttribute('data-poll')})})})});
 document.querySelectorAll('[data-act]').forEach(function(a){a.addEventListener('click',function(ev){var act=a.getAttribute('data-act');

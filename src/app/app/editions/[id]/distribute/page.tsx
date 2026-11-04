@@ -26,6 +26,11 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
   const blocked = canSend(e);
   const emailAud = audienceFor(e, 'email');
   const waAud = audienceFor(e, 'wa_manual');
+  const waApiAud = waReady() ? audienceFor(e, 'whatsapp') : [];
+  const have = (ch: string) => new Set(all('SELECT contact_id FROM deliveries WHERE edition_id = ? AND channel = ?', e.id, ch).map((r) => r.contact_id));
+  const gotEmail = have('email'), gotWa = have('whatsapp');
+  const pick = (rows: any[], got: Set<any>) => rows.filter((c) => !got.has(c.id)).map((c) => ({ tags: String(c.tags || '').split(',').map((t: string) => t.trim().toLowerCase()).filter(Boolean), city: String(c.city || '').toLowerCase() }));
+  const failedCount = Number(get("SELECT COUNT(*) AS n FROM deliveries WHERE edition_id = ? AND status = 'failed' AND channel IN ('email','whatsapp')", e.id)?.n || 0);
   const tags = [...new Set(all("SELECT tags FROM contacts WHERE product_id = ? AND status = 'active'", p.id).flatMap((r) => String(r.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean)))].sort();
   const cities = [...new Set(all("SELECT city FROM contacts WHERE product_id = ? AND status = 'active' AND city <> ''", p.id).map((r) => r.city))].sort();
   const manual = all("SELECT contact_id, status, sent_at FROM deliveries WHERE edition_id = ? AND channel = 'wa_manual'", e.id);
@@ -64,7 +69,7 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
 
       <section className="card">
         <div className="card-head"><h2>2 · Email</h2><span className={`pill ${smtpReady() ? 'ok' : 'warn'}`}>{smtpReady() ? 'SMTP connected' : 'Outbox mode: emails are saved, not sent'}</span></div>
-        <EmailSend editionId={e.id} status={e.status} blocked={!!blocked} total={emailAud.length} tags={tags} cities={cities} waApi={waReady()} defaultAt={defaultAt} tz={g.timezone} pace={g.emailsPerMinute} />
+        <EmailSend editionId={e.id} status={e.status} blocked={!!blocked} total={emailAud.length} emailPeople={pick(emailAud, gotEmail)} waPeople={pick(waApiAud, gotWa)} failed={failedCount} tags={tags} cities={cities} waApi={waReady()} defaultAt={defaultAt} tz={g.timezone} pace={g.emailsPerMinute} />
       </section>
 
       <section className="card">

@@ -27,6 +27,7 @@ export const CRON_PRESETS: { label: string; cron: string }[] = [
 ];
 
 export function nextRun(cron: string, from = new Date()): string | null {
+  if (!cron || cron.trim().split(/\s+/).length !== 5) return null; // exactly 5 fields: minute hour day month weekday
   try {
     return CronExpressionParser.parse(cron, { tz: getSetting('general').timezone, currentDate: from }).next().toISOString();
   } catch {
@@ -53,9 +54,11 @@ async function execute(type: JobType, productId: string, log: (s: string) => voi
   }
   if (type === 'draft') {
     const planned = nextSendDate(getSetting('general'));
-    const exists = get("SELECT id, number FROM editions WHERE product_id = ? AND planned_for = ? AND status <> 'sent'", p.id, planned);
-    if (exists && !config.force) { log(`Edition #${exists.number} is already planned for ${planned}. Skipped.`); return; }
-    const { edition, mode, model } = await draftEdition(p.id, { plannedFor: planned }, 'automation');
+    const exists = get('SELECT id, number, status FROM editions WHERE product_id = ? AND planned_for = ?', p.id, planned);
+    if (exists && !config.force) { log(`Edition #${exists.number} is already ${exists.status === 'sent' ? 'sent' : 'planned'} for ${planned}. Skipped.`); return; }
+    // Run now: draft for the next free send date instead of doubling up a week.
+    const target = exists ? nextSendDate(getSetting('general'), all('SELECT planned_for FROM editions WHERE product_id = ?', p.id).map((r) => r.planned_for)) : planned;
+    const { edition, mode, model } = await draftEdition(p.id, { plannedFor: target }, 'automation');
     log(`Drafted edition #${edition.number} (${mode === 'ai' ? model : 'demo mode'})`);
     const checks = await runChecks(edition.id, true);
     const fails = checks.results.filter((r) => r.status === 'fail').length;
@@ -69,7 +72,7 @@ async function execute(type: JobType, productId: string, log: (s: string) => voi
       WHERE c.product_id = ? AND c.status = 'active' AND c.last_engaged_at >= ? AND (c.last_intent_at IS NULL OR c.last_intent_at < ?) AND c.stage IN ('new','warm')
       AND EXISTS (SELECT 1 FROM events e WHERE e.contact_id = c.id AND e.type IN ('view','poll','scroll') AND e.created_at >= ?)
       ORDER BY c.score DESC LIMIT 15`, p.id, since, since, since);
-    if (rows.length) notify(p.id, 'nudge', `${rows.length} warm readers to follow up`, rows.slice(0, 5).map((r) => `${r.first_name} ${r.last_name}${r.company ? ` (${r.company})` : ''}`.trim()).join(', ') + (rows.length > 5 ? '…' : ''), '/app/leads?view=warm');
+    if (rows.length) notify(p.id, 'nudge', `${rows.length} warm ${rows.length === 1 ? 'reader' : 'readers'} to follow up`, rows.slice(0, 5).map((r) => `${r.first_name} ${r.last_name}${r.company ? ` (${r.company})` : ''}`.trim()).join(', ') + (rows.length > 5 ? '…' : ''), '/app/leads?view=warm');
     log(`${rows.length} warm readers found`);
     return;
   }
@@ -77,7 +80,7 @@ async function execute(type: JobType, productId: string, log: (s: string) => voi
     const to = [p.brand.alertEmail, ...getSetting('alerts').alertEmails.split(',')].map((s) => (s || '').trim()).filter(Boolean);
     const last = get("SELECT * FROM editions WHERE product_id = ? AND status = 'sent' ORDER BY sent_at DESC LIMIT 1", p.id);
     const stats = last ? get(`SELECT
-      (SELECT COUNT(*) FROM deliveries WHERE edition_id = ? AND channel <> 'test' AND status NOT IN ('failed','queued')) AS sent,
+      (SELECT COUNT(*) FROM deliveries WHERE edition_id = ? AND channel <> 'test' AND status NOT IN ('failed','queued','skipped')) AS sent,
       (SELECT COUNT(DISTINCT COALESCE(delivery_id, id)) FROM events WHERE edition_id = ? AND type = 'view') AS views,
       (SELECT COUNT(*) FROM events WHERE edition_id = ? AND type IN ('interested','book','showcase')) AS intents,
       (SELECT COUNT(*) FROM events WHERE edition_id = ? AND type = 'poll') AS polls`, last.id, last.id, last.id, last.id) : null;
@@ -86,7 +89,7 @@ async function execute(type: JobType, productId: string, log: (s: string) => voi
     const title = parse<any>(last?.content, {}).title || '';
     const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;max-width:560px"><h2 style="margin:0 0 8px">${esc(p.newsletter_name)} · weekly report</h2>
       ${last ? `<p>Last edition: <b>#${last.number} ${esc(title)}</b> (sent ${esc(fmtDate(last.sent_at))})</p><table cellpadding="6" style="border-collapse:collapse"><tr><td>Delivered</td><td><b>${stats?.sent || 0}</b></td></tr><tr><td>Opened the page</td><td><b>${stats?.views || 0}</b></td></tr><tr><td>Interest taps</td><td><b>${stats?.intents || 0}</b></td></tr><tr><td>Poll votes</td><td><b>${stats?.polls || 0}</b></td></tr></table>` : '<p>No edition was sent yet.</p>'}
-      <h3>Hottest leads</h3>${hot.length ? `<ol>${hot.map((h) => `<li>${esc(`${h.first_name} ${h.last_name}`.trim())}${h.company ? `, ${esc(h.company)}` : ''}: score ${h.score}${h.last_intent ? ` · last tapped “${esc(h.last_intent)}”` : ''}</li>`).join('')}</ol>` : '<p>No engagement yet.</p>'}
+      <h3>Hottest leads</h3>${hot.length ? `<ol>${hot.map((h) => `<li>${esc(`${h.first_name} ${h.last_name}`.trim())}${h.company ? `, ${esc(h.company)}` : ''}: score ${h.score}${h.last_intent ? ` · last tapped “${esc(({ interested: 'I’m interested', book: 'Book 15 min', showcase: 'an Our-work card', more: 'Send me more' } as any)[h.last_intent] || h.last_intent)}”` : ''}</li>`).join('')}</ol>` : '<p>No engagement yet.</p>'}
       <p><a href="${base}/app/leads">Open leads</a></p></div>`;
     if (to.length) await sendMail({ to: to.join(','), subject: `${p.newsletter_name}: weekly report`, html, kind: 'report' });
     notify(p.id, 'report', 'Weekly report ready', last ? `#${last.number}: ${stats?.views || 0} views, ${stats?.intents || 0} interest taps` : 'No edition sent yet', '/app');

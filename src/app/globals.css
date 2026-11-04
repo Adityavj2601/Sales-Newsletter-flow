@@ -169,9 +169,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .tl time { color: var(--muted); font: 12px var(--f-mono); }
 
 /* Editor */
-.ed-shell { display: grid; grid-template-columns: minmax(300px, 380px) minmax(410px, 1fr) minmax(290px, 350px); gap: 14px; align-items: start; }
-@media (max-width: 1560px) { .ed-shell { grid-template-columns: minmax(300px, 400px) minmax(410px, 1fr); } .ed-right { grid-column: 1 / -1; } }
-@media (max-width: 1100px) { .ed-shell { grid-template-columns: minmax(0, 1fr); } .ed-sticky { position: static; } }
+.ed-shell { display: grid; grid-template-columns: minmax(280px, 360px) minmax(390px, 1fr) minmax(280px, 340px); gap: 14px; align-items: start; }
+@media (max-width: 1280px) { .ed-shell { grid-template-columns: minmax(300px, 400px) minmax(390px, 1fr); } .ed-right { grid-column: 1 / -1; } }
+@media (max-width: 1000px) { .ed-shell { grid-template-columns: minmax(0, 1fr); } .ed-sticky { position: static; } }
 @media (max-width: 900px) { .ed-shell { grid-template-columns: minmax(0, 1fr); } }
 .ed-col { display: grid; gap: 10px; min-width: 0; }
 .ed-sticky { position: sticky; top: 12px; }
@@ -231,3 +231,21 @@ details.more > summary::-webkit-details-marker { display: none; }
 .ed-sticky { top: 84px; }
 .statusbar h1 { flex: 1 1 140px; }
 .statusbar .spacer { display: none; }
+
+@media (max-width: 900px) { .statusbar { top: 52px; } }
+label.f { align-content: start; }
+
+/* Mobile drawer: real backdrop, close button, hidden from keyboard when closed */
+.backdrop { display: none; }
+.side-close { display: none; margin-left: auto; background: none; border: 1px solid #2b3442; color: #fff; border-radius: 8px; padding: 2px 9px; cursor: pointer; }
+@media (max-width: 900px) {
+  .side { visibility: hidden; }
+  .side.open { visibility: visible; box-shadow: none; }
+  .backdrop.on { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
+  .side-close { display: inline-block; }
+}
+.side :focus-visible { outline-color: #86a4f2; }
+.nav .grp { color: #8a94a3; }
+.skip { position: absolute; left: -9999px; top: 8px; z-index: 100; background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 8px; }
+.skip:focus { left: 8px; }
+.tabs { flex-wrap: wrap; }
