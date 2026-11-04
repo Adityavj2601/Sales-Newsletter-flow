@@ -13,8 +13,8 @@ import { Avatar } from '@/components/people/Avatar';
 import { Icon } from '@/components/people/Icon';
 import { Rel } from '@/components/people/Rel';
 import { StagePicker } from '@/components/people/StageAction';
-import { EditSheet, ConsentSwitches, NoteComposer } from '@/components/people/ContactBits';
-import { saveContact, deleteContact, setStage } from '../../actions';
+import { EditSheet, ConsentSwitches, NoteComposer, CopyMenuItem, UnsubscribeMenuItem } from '@/components/people/ContactBits';
+import { saveContact, deleteContact, setStage, bulkContacts } from '../../actions';
 import { ContactFields } from '../fields';
 
 export const dynamic = 'force-dynamic';
@@ -99,6 +99,9 @@ export default async function Contact({ params }: { params: Promise<{ id: string
           </EditSheet>
           {wa && !banner && <a className="btn wa" href={wa} target="_blank" rel="noreferrer"><Icon name="chat" size={15} />WhatsApp</a>}
           <Popover className="pmenu" summary={<><Icon name="more" size={18} /><span className="pmenu-l">More</span></>}>
+            {c.email ? <CopyMenuItem text={c.email} label="Copy email" /> : null}
+            {c.status === 'active' && <UnsubscribeMenuItem id={id} name={c.first_name || name} action={bulkContacts} />}
+            {(c.email || c.status === 'active') && <span className="pmenu-sep" role="separator" />}
             <div className="menu-danger"><Confirm action={deleteContact.bind(null, id)} label="Delete contact…" confirmLabel={`Delete ${c.first_name || 'contact'}`} /></div>
           </Popover>
         </div>

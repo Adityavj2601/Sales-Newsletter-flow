@@ -63,6 +63,30 @@ export function SaveBar({ label = 'Save', pending = 'Saving…', children, note,
     return () => { window.removeEventListener('click', onClick, true); window.removeEventListener('beforeunload', onUnload); setNavGuard(null); };
   }, [dirty, router]);
 
+  // While the bar floats, keep the field being edited (its whole row) clear of it: the bar is sticky, so the
+  // browser's own focus/caret scrolling would happily leave the row underneath. scroll-padding (CSS) covers
+  // keyboard focus; this covers typing and the moment the bar first appears.
+  const show = dirty || busy;
+  useEffect(() => {
+    const bar = ref.current;
+    const f = form();
+    if (!show || !bar || !f) return;
+    const root = document.documentElement;
+    const keep = () => {
+      root.style.setProperty('--savebar-h', `${bar.offsetHeight}px`);
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || !f.contains(el) || bar.contains(el)) return;
+      const row = (el.closest('.cx-row') as HTMLElement | null) || el;
+      // offsetHeight ignores the bar's entrance transform; 16px is its sticky offset, 12px its fade.
+      const limit = window.innerHeight - 16 - bar.offsetHeight - 12;
+      if (row.getBoundingClientRect().bottom > limit) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    const raf = requestAnimationFrame(keep);
+    f.addEventListener('input', keep);
+    f.addEventListener('focusin', keep);
+    return () => { cancelAnimationFrame(raf); f.removeEventListener('input', keep); f.removeEventListener('focusin', keep); };
+  }, [show]);
+
   const revert = () => { form()?.reset(); setDirty(false); };
   const choose = (what: 'save' | 'discard' | 'cancel') => {
     const go = leaving;
@@ -77,7 +101,6 @@ export function SaveBar({ label = 'Save', pending = 'Saving…', children, note,
   };
 
   // One save pattern: nothing shows while the form matches what's saved; the first edit brings up the floating bar.
-  const show = dirty || busy;
   return (
     <div ref={ref} className={`cx-savebar ${show ? 'dirty' : 'clean'}${note ? ' has-note' : ''}`}>
       <span className="cx-savebar-msg" aria-live="polite">{show ? <><span className="cx-pulse" aria-hidden />Unsaved changes</> : note}</span>

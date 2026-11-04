@@ -117,10 +117,17 @@
 .cx-savebar-msg { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .cx-savebar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .cx-savebar.dirty {
-  position: sticky; bottom: 16px; z-index: 6; padding: 8px 8px 8px 16px; background: var(--glass);
-  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); box-shadow: var(--shadow-3);
+  position: sticky; bottom: 16px; z-index: 6; padding: 8px 8px 8px 16px; background: transparent; isolation: isolate;
   animation: cx-bar-in var(--t3) var(--spring) both;
 }
+/* A solid card on a page-coloured backdrop: the backdrop fades in over 12px above the bar and fills the 16px below it,
+   so rows scrolling underneath never peek around its rounded corners or through the gap. */
+.cx-savebar.dirty::before, .cx-savebar.dirty::after { content: ""; position: absolute; z-index: -1; pointer-events: none; }
+.cx-savebar.dirty::before { inset: -12px -6px -16px; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 12px); }
+.cx-savebar.dirty::after { inset: 0; border-radius: inherit; background: var(--surface); box-shadow: var(--shadow-3); }
+/* While it floats: room below the last row, and focus scrolling that stops above the bar. */
+.se-pane:has(.cx-savebar.dirty) { padding-bottom: calc(var(--savebar-h, 52px) + 16px); }
+html:has(.cx-savebar.dirty) { scroll-padding-bottom: calc(var(--savebar-h, 52px) + 16px + 12px + 8px); }
 .cx-savebar.dirty .cx-savebar-msg { color: var(--ink); font-weight: 500; }
 .cx-savebar.clean:not(.has-note) { display: none; }
 
@@ -279,12 +286,13 @@ table.st-list { width: 100%; border-collapse: collapse; }
 .so-list > li:last-child { border-radius: 0 0 var(--r) var(--r); }
 .so-list > li:only-child { border-radius: var(--r); }
 .so-menu { position: relative; }
+/* Every “⋯” is the same rounded-square fill button as the Contact and Results header menus (a .btn with just the glyph). */
 .so-more {
-  width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center; background: transparent; color: var(--muted); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 8px; border: 0; display: grid; place-items: center; background: var(--fill); color: var(--ink); cursor: pointer;
   transition: background var(--t1) var(--ease), color var(--t1) var(--ease), transform var(--t1) var(--ease);
 }
-.so-more:hover, .so-more[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
-.so-more:active { transform: scale(0.92); }
+.so-more:hover, .so-more[aria-expanded="true"] { background: var(--fill-2); color: var(--ink); }
+.so-more:active { transform: scale(0.97); }
 .so-menu-pop {
   position: absolute; right: -4px; top: calc(100% + 6px); z-index: 30; width: 260px; padding: 6px; border-radius: var(--r);
   background: var(--surface); box-shadow: var(--shadow-3); transform-origin: top right; animation: cx-menu-in var(--t2) var(--ease-out) both;
@@ -666,6 +674,24 @@ input[type="color"].se-swatch::-moz-color-swatch { border: 0; border-radius: 50%
 /* ---------- Round 3 ---------- */
 /* Story pool: before anything is starred, a quiet star instead of empty progress pips */
 .st-meter .st-star-ic { color: var(--cx-star); }
+/* The star stays on the first line of its sentence; the sentence wraps beside it, never under it. */
+.st-meter:has(> .st-star-ic) { flex-wrap: nowrap; align-items: flex-start; gap: 8px; }
+.st-meter > .st-star-ic { flex: none; margin-top: 2px; }
+.st-meter > #st-why { min-width: 0; }
+/* Story filter: short labels only on phones */
+.st-filter .st-fs { display: none; }
+@media (max-width: 700px) {
+  /* A segmented control fits its row: four equal segments, no scrolling and no edge fade (overrides the globals phone rule). */
+  .st-tools .tabs.st-filter { display: flex; width: 100%; overflow: visible; -webkit-mask-image: none; mask-image: none; scroll-snap-type: none; }
+  /* Equal segments; one only grows past its share when its label needs it (min-width: auto). */
+  .st-filter > a { flex: 1 1 0; min-width: auto; display: inline-flex; align-items: center; justify-content: center; padding: 6px 3px; font-size: 13px; }
+  .st-filter .st-fl { display: none; }
+  .st-filter .st-fs { display: inline; }
+  .st-filter .n { margin-left: 4px; }
+  .st-filter .n.zero { display: none; }
+}
+/* Very narrow phones: only the selected segment keeps its count. */
+@media (max-width: 369px) { .st-filter > a:not([aria-current]) .n { display: none; } }
 /* Unsaved-changes alert (Settings): compact, centred, Save is the default button */
 .cx-alert-backdrop { z-index: 90; }
 .cx-alert { width: min(400px, 100%); padding: 24px 22px 18px; text-align: center; display: grid; justify-items: center; gap: 6px; }
