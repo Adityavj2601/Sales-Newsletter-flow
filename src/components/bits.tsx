@@ -19,3 +19,13 @@ export function Score({ n }: { n: number }) {
   const cls = n >= 50 ? 'ok' : n >= 15 ? 'warn' : '';
   return <span className={`pill ${cls}`} title="Lead score">{n}</span>;
 }
+
+/** Initials avatar with a stable, calm tint derived from the name. */
+const hue = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 11);
+export function initials(name: string) {
+  const parts = name.replace(/[^\p{L}\p{N}\s@.]/gu, '').split(/[\s@.]+/).filter(Boolean);
+  return ((parts[0]?.[0] || '?') + (parts.length > 1 ? parts[1][0] : '')).toUpperCase();
+}
+export function Avatar({ name, size = 34 }: { name: string; size?: number }) {
+  return <span className="avatar" aria-hidden style={{ width: size, height: size, fontSize: Math.round(size * 0.38), ['--h' as string]: hue(name || '?') }}>{initials(name || '?')}</span>;
+}

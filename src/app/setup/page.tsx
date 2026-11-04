@@ -4,6 +4,9 @@ import { hashPassword } from '@/lib/crypto';
 import { createSession, hasUsers } from '@/lib/auth';
 import { seedProducts } from '@/lib/seed';
 import { getSetting, setSetting } from '@/lib/settings';
+import { Submit } from '@/components/ui';
+import { Icon, type IconName } from '@/components/shell/icons';
+import { AuthField } from '@/components/shell/AuthField';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Set up' };
@@ -29,19 +32,31 @@ async function setup(fd: FormData) {
 export default async function Setup({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   if (hasUsers()) redirect('/login');
   const sp = await searchParams;
+  const gets: [IconName, string, string][] = [
+    ['swap', 'Two products', 'Unada and HeyVeya'], ['sources', 'News sources', 'Scored every morning'],
+    ['automations', 'Weekly automations', 'Draft, send, report'], ['editions', 'Four sample editions', 'Your month-1 plan'],
+  ];
   return (
     <main className="auth">
-      <form className="card" action={setup}>
-        <div className="eyebrow">First-time setup</div>
-        <h1>Welcome to Brief Studio</h1>
-        <p className="hint">Create the admin account. Your two products (Unada and HeyVeya), news sources, weekly automations and the four month-1 sample editions will be set up for you.</p>
-        {sp.e && <div className="notice bad">Fill in every field. The password needs at least 8 characters.</div>}
-        <label className="f"><span>Your name</span><input className="in" name="name" required autoComplete="name" /></label>
-        <label className="f"><span>Work email</span><input className="in" type="email" name="email" required autoComplete="email" /><small>Sales alerts go here until you change it.</small></label>
-        <label className="f"><span>Password</span><input className="in" type="password" name="password" minLength={8} required autoComplete="new-password" /></label>
-        <label className="f"><span>Public address of this app (optional)</span><input className="in" type="url" name="base" placeholder="https://brief.yourdomain.com" /><small>Used in every link you send. You can set it later in Settings.</small></label>
-        <button className="btn primary" type="submit">Create account and start</button>
-      </form>
+      <div className="auth-wrap wide">
+        <form className={`card${sp.e ? ' shake' : ''}`} action={setup} aria-labelledby="auth-h">
+          <div className="auth-mark" aria-hidden><Icon name="editions" size={26} strokeWidth={1.9} /></div>
+          <div className="auth-title">
+            <div className="eyebrow">First-time setup</div>
+            <h1 id="auth-h">Welcome to Brief Studio</h1>
+            <p className="hint">Create the admin account. Your two products (Unada and HeyVeya), news sources, weekly automations and the four month-1 sample editions will be set up for you.</p>
+          </div>
+          <ul className="auth-gets" aria-label="Set up for you">
+            {gets.map(([ic, t, s]) => <li key={t}><span className="kind kind-blue" aria-hidden><Icon name={ic} size={15} /></span><span><b>{t}</b><small>{s}</small></span></li>)}
+          </ul>
+          {sp.e && <div className="notice bad" role="alert"><Icon name="warn" size={16} />Fill in every field. The password needs at least 8 characters.</div>}
+          <AuthField label="Your name" name="name" icon="person" required autoComplete="name" autoFocus />
+          <AuthField label="Work email" name="email" kind="email" icon="mail" required autoComplete="email" hint="Sales alerts go here until you change it." placeholder="you@company.com" />
+          <AuthField label="Password" name="password" kind="new-password" icon="lock" minLength={8} required autoComplete="new-password" />
+          <AuthField label="Public address of this app (optional)" name="base" kind="url" icon="globe" placeholder="https://brief.yourdomain.com" hint="Used in every link you send. You can set it later in Settings." />
+          <Submit className="btn primary lg" pending="Setting things up…">Create account and start</Submit>
+        </form>
+      </div>
     </main>
   );
 }
