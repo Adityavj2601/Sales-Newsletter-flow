@@ -1,8 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
+import { Icon } from './shell/icons';
+import { NAV, isActive } from './shell/nav';
 
 /** Toast: reads ?msg= set by server actions, shows a glass toast that slides in and fades out. */
 export function Flash() {
@@ -89,69 +91,95 @@ export function Confirm({ action, label, confirmLabel = 'Yes, do it', className 
   );
 }
 
-const NAV: { grp?: string; href?: string; label?: string; key?: string }[] = [
-  { grp: 'Weekly flow' },
-  { href: '/app', label: 'Home' },
-  { href: '/app/stories', label: 'Story pool', key: 'stories' },
-  { href: '/app/editions', label: 'Editions', key: 'editions' },
-  { href: '/app/leads', label: 'Leads', key: 'leads' },
-  { grp: 'Inputs' },
-  { href: '/app/knowledge', label: 'Our work (knowledge)', key: 'kb' },
-  { href: '/app/contacts', label: 'Contacts' },
-  { href: '/app/sources', label: 'News sources' },
-  { grp: 'System' },
-  { href: '/app/automations', label: 'Automations' },
-  { href: '/app/notifications', label: 'Notifications', key: 'notif' },
-  { href: '/app/outbox', label: 'Email outbox', key: 'outbox' },
-  { href: '/app/settings', label: 'Settings' },
-  { href: '/app/guide', label: 'How it works' },
-];
+/* ---------- Shell: sidebar navigation, product switcher, mobile drawer ---------- */
 
 export function Nav({ counts }: { counts: Record<string, number> }) {
   const path = usePathname();
+  const ref = useRef<HTMLElement>(null);
+  const [ind, setInd] = useState<{ y: number; h: number; ready: boolean } | null>(null);
+  // One highlight that glides between items (macOS source-list feel) instead of each link fading on its own.
+  useLayoutEffect(() => {
+    const nav = ref.current;
+    const a = nav?.querySelector<HTMLElement>('a[aria-current="page"]');
+    if (!nav || !a) { setInd(null); return; }
+    setInd((prev) => ({ y: a.offsetTop, h: a.offsetHeight, ready: !!prev }));
+  }, [path]);
   return (
-    <nav className="nav" aria-label="Main">
-      {NAV.map((n, i) => n.grp ? <div className="grp" key={i}>{n.grp}</div> : (
-        <Link key={n.href} href={n.href!} aria-current={(n.href === '/app' ? path === '/app' : path.startsWith(n.href!)) ? 'page' : undefined}>
-          <span>{n.label}</span>{n.key && counts[n.key] ? <span className="count">{counts[n.key]}</span> : null}
-        </Link>
+    <nav className="nav" aria-label="Main" ref={ref}>
+      {ind && <span className={`nav-ind${ind.ready ? ' ready' : ''}`} style={{ transform: `translateY(${ind.y}px)`, height: ind.h }} aria-hidden />}
+      {NAV.map((g) => (
+        <div className="nav-grp" key={g.grp}>
+          <div className="grp" aria-hidden>{g.grp}</div>
+          {g.items.map((n) => {
+            const c = n.key ? counts[n.key] : 0;
+            return (
+              <Link key={n.href} href={n.href} aria-current={isActive(n.href, path) ? 'page' : undefined}>
+                <Icon name={n.icon} />
+                <span className="lbl">{n.label}</span>
+                {c ? <span className={`count${n.key === 'notif' ? ' hot' : ''}`}><span className="sr">, </span>{c > 99 ? '99+' : c}<span className="sr"> new</span></span> : null}
+              </Link>
+            );
+          })}
+        </div>
       ))}
     </nav>
   );
 }
 
+const monoHue = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+
 export function ProductSwitch({ products, current, action }: { products: { id: string; name: string; newsletter_name: string }[]; current: string; action: (fd: FormData) => Promise<void> }) {
   const path = usePathname();
+  const cur = products.find((p) => p.id === current) || products[0];
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setBusy(false); }, [current]);
   return (
-    <form action={action} className="switch" onSubmit={(e) => { const t = e.currentTarget.elements.namedItem('to') as HTMLInputElement; t.value = window.location.pathname + window.location.search; }}>
+    <form action={action} className="switch" onSubmit={(e) => { setBusy(true); const t = e.currentTarget.elements.namedItem('to') as HTMLInputElement; t.value = window.location.pathname + window.location.search; }}>
       <label htmlFor="product-switch">Product</label>
       <input type="hidden" name="to" defaultValue={path} />
-      <select key={current} id="product-switch" name="product" defaultValue={current} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
-        {products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.newsletter_name}</option>)}
-      </select>
+      <div className="switch-btn" data-busy={busy || undefined}>
+        <span className="mono" style={{ ['--h' as string]: monoHue(cur?.name || 'B') }} aria-hidden>{(cur?.name || '?')[0]}</span>
+        <span className="switch-txt" aria-hidden><b>{cur?.name}</b><small>{cur?.newsletter_name}</small></span>
+        <span className="switch-chev" aria-hidden>{busy ? <Spinner size={13} /> : <Icon name="updown" size={15} />}</span>
+        <select key={current} id="product-switch" name="product" defaultValue={current} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
+          {products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.newsletter_name}</option>)}
+        </select>
+      </div>
     </form>
   );
 }
 
 const setMenu = (open: boolean) => {
-  document.querySelector('.side')?.classList.toggle('open', open);
+  const side = document.querySelector('.side');
+  if (!side) return;
+  const was = side.classList.contains('open');
+  side.classList.toggle('open', open);
   document.querySelector('.backdrop')?.classList.toggle('on', open);
+  document.documentElement.classList.toggle('menu-open', open);
   document.querySelectorAll('[data-menu-toggle]').forEach((b) => b.setAttribute('aria-expanded', String(open)));
-  if (open) (document.querySelector('.side a, .side select') as HTMLElement | null)?.focus();
+  if (open && !was) setTimeout(() => (document.querySelector('.side .side-close') as HTMLElement | null)?.focus({ preventScroll: true }), 60);
+  if (!open && was && window.matchMedia('(max-width: 900px)').matches) (document.querySelector('[data-menu-toggle]') as HTMLElement | null)?.focus({ preventScroll: true });
 };
 export function MobileToggle() {
-  return <button type="button" data-menu-toggle aria-controls="sidebar" aria-expanded="false" onClick={() => setMenu(!document.querySelector('.side')?.classList.contains('open'))}>☰ Menu</button>;
+  return (
+    <button type="button" className="icon-btn" data-menu-toggle aria-controls="sidebar" aria-expanded="false" onClick={() => setMenu(!document.querySelector('.side')?.classList.contains('open'))}>
+      <Icon name="menu" size={21} /><span className="sr">Menu</span>
+    </button>
+  );
 }
 export function MenuClose() {
-  return <button type="button" className="side-close" aria-label="Close menu" onClick={() => setMenu(false)}>✕</button>;
+  return <button type="button" className="side-close" aria-label="Close menu" onClick={() => setMenu(false)}><Icon name="close" size={14} strokeWidth={2.2} /></button>;
 }
 export function CloseOnNav() {
   const path = usePathname();
   useEffect(() => { setMenu(false); }, [path]);
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(false); };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && document.querySelector('.side.open')) setMenu(false); };
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    const mq = window.matchMedia('(min-width: 901px)');
+    const wide = () => { if (mq.matches) setMenu(false); };
+    mq.addEventListener('change', wide);
+    return () => { window.removeEventListener('keydown', k); mq.removeEventListener('change', wide); };
   }, []);
   return <div className="backdrop" onClick={() => setMenu(false)} aria-hidden="true" />;
 }
