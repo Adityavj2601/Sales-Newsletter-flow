@@ -16,12 +16,12 @@ export default function Loading() {
           <span className="skeleton sk-line" style={{ width: 150, height: 12 }} />
           <span className="skeleton sk-line" style={{ width: '82%', height: 26 }} />
           <span className="skeleton sk-line" style={{ width: '64%' }} />
-          <span className="skeleton sk-line" style={{ width: '100%', maxWidth: 520, height: 10, margin: '14px 0 10px' }} />
-          <div className="row"><span className="skeleton sk-btn" style={{ width: 150 }} /><span className="skeleton sk-btn" style={{ width: 92 }} /></div>
+          <span className="skeleton sk-line" style={{ width: '100%', maxWidth: 560, height: 4, margin: '14px 0 22px' }} />
+          <div className="row" style={{ justifyContent: 'space-between' }}><span className="skeleton sk-line" style={{ width: 180 }} /><span className="skeleton sk-btn" style={{ width: 150, borderRadius: 999 }} /></div>
         </div>
       </section>
       <section className="eds-grp">
-        <div className="eds-grp-h"><h2>Upcoming</h2></div>
+        <h2 className="group-title">Upcoming</h2>
         <div className="tbl-wrap eds-list sk-list">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="sk-row">

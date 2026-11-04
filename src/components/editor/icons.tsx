@@ -55,6 +55,7 @@ export const I = {
   refresh: (p: P) => <S {...p}><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3.2h-3.2" /></S>,
   mail: sh('mail'),
   lock: sh('lock'),
+  share: (p: P) => <S {...p}><path d="M10 12.2V3M6.8 6 10 2.8 13.2 6" /><path d="M7 8.5H5.6A1.6 1.6 0 0 0 4 10.1v5.3A1.6 1.6 0 0 0 5.6 17h8.8a1.6 1.6 0 0 0 1.6-1.6v-5.3a1.6 1.6 0 0 0-1.6-1.6H13" /></S>,
   link2: sh('globe'),
 };
 

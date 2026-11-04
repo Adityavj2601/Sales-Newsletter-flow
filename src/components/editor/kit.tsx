@@ -21,6 +21,14 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
     setInd({ x: b.offsetLeft, w: b.offsetWidth });
   }, []);
   useLayoutEffect(() => { measure(); }, [value, measure, options.length]);
+  /* When the control scrolls sideways (narrow screens), keep the selected segment in view: on load and on change. */
+  useEffect(() => {
+    const root = ref.current;
+    const b = root?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]');
+    if (!root || !b || root.scrollWidth <= root.clientWidth + 1) return;
+    const left = b.offsetLeft - (root.clientWidth - b.offsetWidth) / 2;
+    root.scrollTo({ left: Math.max(0, left), behavior: reducedMotion() ? 'auto' : 'smooth' });
+  }, [value]);
   useEffect(() => {
     const t = requestAnimationFrame(() => setAnim(true));
     const ro = new ResizeObserver(() => measure());

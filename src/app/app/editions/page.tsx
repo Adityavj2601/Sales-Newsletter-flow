@@ -9,13 +9,12 @@ import { editionMetrics } from '@/lib/metrics';
 import { StatusPill } from '@/components/bits';
 import { ovKey } from '@/lib/types';
 import { I } from '@/components/editor/icons';
+import { FlowStepper } from '@/components/FlowStepper';
+import { flowState } from '@/lib/flow';
 import { NewEdition, NewEditionButton } from './NewEdition';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Editions' };
-
-const FLOW = [['draft', 'Draft'], ['review', 'In review'], ['approved', 'Approved'], ['scheduled', 'Scheduled'], ['sent', 'Sent']] as const;
-const flowIndex = (s: string) => (s === 'sending' ? 4 : Math.max(0, FLOW.findIndex(([k]) => k === s)));
 
 export default async function Editions({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
   const p = await requireProduct();
@@ -39,18 +38,9 @@ export default async function Editions({ searchParams }: { searchParams: Promise
   // "Up next": the soonest upcoming edition that is still in the future (or the newest one if none are dated).
   const next = [...upcoming].filter((e) => (sendDate(e) || '').slice(0, 10) >= today).sort((a, b) => String(sendDate(a)).localeCompare(String(sendDate(b))))[0] || upcoming[0];
   const checksLine = (e: (typeof eds)[number]) => {
-    if (!e.checks) return { cls: '', text: 'Not checked' };
+    if (!e.checks) return { cls: '', text: 'Not checked yet' };
     const fails = e.checks.results.filter((r) => r.status === 'fail' && !e.overrides?.[ovKey(r)]).length;
-    return fails ? { cls: 'bad', text: `${fails} failing` } : { cls: 'ok', text: 'All pass' };
-  };
-  /* One next step per edition, following Draft → Run checks → Approve → Send. */
-  const nextStep = (e: (typeof eds)[number]) => {
-    const ck = checksLine(e);
-    if (e.status === 'scheduled') return { label: 'View schedule', href: `/app/editions/${e.id}/distribute`, send: true };
-    if (e.status === 'approved') return { label: 'Choose who gets it', href: `/app/editions/${e.id}/distribute`, send: true };
-    if (!e.checks) return { label: 'Continue editing', href: `/app/editions/${e.id}`, send: false };
-    if (ck.cls === 'bad') return { label: `Fix ${ck.text.split(' ')[0]} ${ck.text.startsWith('1 ') ? 'issue' : 'issues'}`, href: `/app/editions/${e.id}`, send: false };
-    return { label: 'Review and approve', href: `/app/editions/${e.id}`, send: false };
+    return fails ? { cls: 'bad', text: `${fails} failing` } : { cls: 'ok', text: 'All checks pass' };
   };
   const preview = (e: (typeof eds)[number]) => `${base}/e/${p.slug}/${e.slug}${e.status === 'sent' ? '' : '?preview=1'}`;
   const cover = (e: (typeof eds)[number]) => `/og/${e.id}.png?v=${encodeURIComponent(e.updated_at)}`;
@@ -60,43 +50,44 @@ export default async function Editions({ searchParams }: { searchParams: Promise
     <div className="eds">
       <div className="ph">
         <div>
-          <div className="eyebrow">{p.newsletter_name}</div>
+          <div className="eyebrow">{p.name} · {p.newsletter_name}</div>
           <h1>Editions</h1>
           <p className="sub">{upcoming.length} upcoming · {done.length} sent. Editing an approved edition sends it back to review.</p>
         </div>
         <div className="row"><NewEdition open={!!sp.new} stories={stories as any} preStories={preStories} kb={kb as any} preKb={preKb} planned={planned} aiReady={configuredProviders().length > 0} /></div>
       </div>
 
-      {next && (
-        <section className="eds-next" aria-label="Up next">
-          <figure className="eds-cover-w">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="eds-cover" src={cover(next)} alt={`Share preview: ${next.content.preview.title || next.content.title}`} loading="lazy" />
-            <figcaption>Share preview</figcaption>
-          </figure>
-          <div className="eds-next-b">
-            <div className="eds-next-k"><span className="eyebrow">Up next</span><span className="eds-when"><I.calendar size={13} />{fmtDay(sendDate(next))}{rel(sendDate(next)) ? <span> · {rel(sendDate(next))}</span> : null}</span></div>
-            <h2><span className="eds-no tnum">{edNo(next.number)}</span>{next.content.title || 'Untitled'}</h2>
-            {next.content.dek && <p className="eds-dek">{next.content.dek}</p>}
-            <ol className="eds-flow" aria-label={`Status: ${next.status}`}>
-              {FLOW.map(([k, label], i) => {
-                const at = flowIndex(next.status);
-                return <li key={k} className={i < at ? 'done' : i === at ? 'now' : ''} aria-current={i === at ? 'step' : undefined}><span className="eds-flow-d" aria-hidden />{label}</li>;
-              })}
-            </ol>
-            <div className="eds-next-a">
-              <Link className="btn primary" href={nextStep(next).href}>{nextStep(next).label}</Link>
-              {nextStep(next).send && <Link className="btn" href={`/app/editions/${next.id}`}>Edit</Link>}
-              <a className="btn ghost" href={preview(next)} target="_blank" rel="noreferrer">Preview<I.external size={13} /></a>
-              <span className={`eds-ck ${checksLine(next).cls}`}><span className="dot" />Checks: {checksLine(next).text.toLowerCase()}</span>
+      {next && (() => {
+        const st = flowState(next);
+        const inEditor = st.href === `/app/editions/${next.id}`;
+        return (
+          <section className="eds-next" aria-label="Up next">
+            <Link className="eds-cover-w" href={`/app/editions/${next.id}`} tabIndex={-1} aria-hidden>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="eds-cover" src={cover(next)} alt="" loading="lazy" />
+            </Link>
+            <div className="eds-next-b">
+              <div className="eds-next-k"><span className="eyebrow">Up next</span><span className="eds-when"><I.calendar size={13} />{fmtDay(sendDate(next))}{rel(sendDate(next)) ? <span> · {rel(sendDate(next))}</span> : null}</span></div>
+              <h2><span className="eds-no tnum">{edNo(next.number)}</span>{next.content.title || 'Untitled'}</h2>
+              {next.content.dek && <p className="eds-dek">{next.content.dek}</p>}
+              <FlowStepper current={st.current} />
+              <div className="eds-step">
+                <div className="eds-step-t"><b>{st.title}</b><span>{st.detail}</span></div>
+                <div className="eds-next-a">
+                  <a className="icon-btn eds-share" href={cover(next)} target="_blank" rel="noreferrer" title="See the share image people get with the link" aria-label="Open the share image"><I.share size={17} /></a>
+                  <a className="btn" href={preview(next)} target="_blank" rel="noreferrer">Preview<I.external size={13} /></a>
+                  {!inEditor && <Link className="btn" href={`/app/editions/${next.id}`}>Edit</Link>}
+                  <Link className="btn primary" href={st.href}>{st.cta}</Link>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        );
+      })()}
 
       {upcoming.length > 0 && (
         <section className="eds-grp">
-          <div className="eds-grp-h"><h2>Upcoming</h2><span className="pane-c tnum">{upcoming.length}</span><span className="eds-grp-sub">In send order</span></div>
+          <h2 className="group-title">Upcoming</h2>
           <div className="tbl-wrap eds-list">
             <table className="tbl">
               <thead><tr><th className="c-no">#</th><th>Edition</th><th>Status</th><th>Send date</th><th>Checks</th><th className="c-act"><span className="sr">Actions</span></th></tr></thead>
@@ -132,7 +123,7 @@ export default async function Editions({ searchParams }: { searchParams: Promise
 
       {done.length > 0 && (
         <section className="eds-grp">
-          <div className="eds-grp-h"><h2>Sent</h2><span className="pane-c tnum">{done.length}</span></div>
+          <h2 className="group-title">Sent</h2>
           <div className="tbl-wrap eds-list sent">
             <table className="tbl">
               <thead><tr><th className="c-no">#</th><th>Edition</th><th>Sent</th><th className="num">Delivered</th><th className="num">Readers</th><th className="num">Interested</th><th className="c-act"><span className="sr">Actions</span></th></tr></thead>

@@ -112,7 +112,7 @@ export function NewEdition({ open, stories, preStories, kb, preKb, planned, aiRe
                 <div className="eyebrow">{stories.length ? `Step ${step} of 2` : 'New edition'}</div>
                 <h2>{!stories.length ? 'Start with this week’s news' : step === 1 ? 'Pick this week’s stories' : 'Add Our work and a brief'}</h2>
               </div>
-              <button type="button" className="icon-btn" onClick={close} aria-label="Close"><I.close size={16} /></button>
+              <button type="button" className="icon-btn ne-x" onClick={close} aria-label="Close"><I.close size={14} /></button>
               {stories.length > 0 && <div className="ne-steps" aria-hidden><span className="on" /><span className={step === 2 ? 'on' : ''} /></div>}
             </div>
             <div className="ne-b" ref={bodyRef}>

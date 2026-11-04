@@ -8,7 +8,8 @@ export default function Loading() {
   const path = usePathname() || '';
   if (/\/(distribute|analytics)(\/|$)/.test(path)) return <AppLoading />;
   return (
-    <div className="ed sk-page" aria-busy="true" aria-label="Loading the editor">
+    <div className="ed ed-route sk-page" aria-busy="true" aria-label="Loading the editor">
+      <div className="ed-top">
       <div className="statusbar ed-bar">
         <div className="tb-l">
           <span className="skeleton sk-line" style={{ width: 84, height: 16 }} />
@@ -16,6 +17,7 @@ export default function Loading() {
           <span className="skeleton sk-pill" />
         </div>
         <div className="tb-r"><span className="skeleton sk-btn" style={{ width: 128, borderRadius: 999 }} /></div>
+      </div>
       </div>
       <div className="ed-shell ed-v2">
         <div className="ed-col ed-left">

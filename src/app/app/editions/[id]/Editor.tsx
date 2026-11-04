@@ -7,6 +7,8 @@ import { Confirm } from '@/components/ui';
 import { I, BlockIcon, BLOCK_META } from '@/components/editor/icons';
 import { Segmented, Popover, PreviewFrame, ScaledPreview, Ring, useFlip, useMod, Kbd, reducedMotion } from '@/components/editor/kit';
 import { edNo, fmtDay, fmtTime, todayIn } from '@/lib/format';
+import { FlowStepper } from '@/components/FlowStepper';
+import { flowState, type FlowStage } from '@/lib/flow';
 
 type KB = { id: string; title: string; summary: string; problem: string; result: string; pillar: Pillar; status: Maturity; media_url: string | null; client_name: string | null; client_permission: number };
 type Story = { id: string; title: string; url: string; publisher: string; published_at: string | null };
@@ -17,13 +19,14 @@ type Toast = Note & { id: number; out?: boolean };
 const STATUS_LABEL: Record<string, [string, string]> = { draft: ['', 'Draft'], review: ['warn', 'In review'], approved: ['info', 'Approved'], scheduled: ['info', 'Scheduled'], sending: ['warn', 'Sending'], sent: ['ok', 'Sent'] };
 const QUICK = ['Make it punchier and shorter', 'Rewrite “why it matters” for a sales head', 'Make the headline more specific', 'Simplify the language', 'Write a warmer WhatsApp message', 'Check the tone is not salesy'];
 const VIEWS = [{ value: 'phone' as const, label: 'Phone' }, { value: 'web' as const, label: 'Desktop' }, { value: 'email' as const, label: 'Email' }, { value: 'wa' as const, label: 'WhatsApp' }];
-const WIDE = '(min-width: 1400px)';
+const WIDE = '(min-width: 1500px)';
 const STACK = '(max-width: 999px)';
 const rid = () => Math.random().toString(36).slice(2, 9);
 /** "9:01 pm" today, otherwise "Wed, 4 Nov · 9:01 pm" — the app-wide time format. */
 const when = (iso: string) => (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIn() ? fmtTime(iso) : `${fmtDay(iso)} · ${fmtTime(iso)}`);
-/* The web preview carries a "Preview" strip; inside the editor's device frames it should read as quiet chrome, not a warning. */
-const CALM_STRIP = '<style>.pv{background:#f2f2f7!important;color:#6e6e73!important;font-size:12px!important;font-weight:500!important;padding:7px 16px!important;letter-spacing:0}@media (prefers-color-scheme:dark){.pv{background:#1c1c1e!important;color:#98989d!important}}</style>';
+/* The web preview carries a "Preview. Taps here are not recorded." strip for the reader page. Inside the editor's
+   device frames the caption under the device already says so, so the strip is hidden. */
+const CALM_STRIP = '<style>.pv{display:none!important}</style>';
 const calm = (html: string) => (html.includes('</head>') ? html.replace('</head>', `${CALM_STRIP}</head>`) : html);
 function rel(iso: string) {
   const s = (Date.now() - +new Date(iso)) / 1000;
@@ -142,6 +145,24 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   const [layout, setLayout] = useState<'wide' | 'mid' | 'stack'>('wide');
   const [inspHidden, setInspHidden] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  /* Narrow screens show one pane at a time, switched from the bottom bar. Each pane keeps its own scroll position. */
+  const [pane, setPaneRaw] = useState<'content' | 'preview' | 'insp'>('content');
+  const paneRef = useRef(pane);
+  paneRef.current = pane;
+  const paneScroll = useRef<Record<string, number>>({});
+  const setPane = useCallback((next: 'content' | 'preview' | 'insp') => {
+    if (paneRef.current === next) return;
+    paneScroll.current[paneRef.current] = window.scrollY;
+    setPaneRaw(next);
+    // First visit to Preview/Copilot lands on the pane itself (just under the bar), not on the large title above it.
+    requestAnimationFrame(() => {
+      const saved = paneScroll.current[next];
+      const shell = document.querySelector<HTMLElement>('.ed-shell');
+      const bar = document.querySelector<HTMLElement>('.ed-top');
+      const paneTop = shell && bar && next !== 'content' ? Math.max(0, shell.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 12) : 0;
+      window.scrollTo({ top: saved ?? paneTop });
+    });
+  }, []);
   useEffect(() => {
     const w = window.matchMedia(WIDE), s = window.matchMedia(STACK);
     const u = () => setLayout(w.matches ? 'wide' : s.matches ? 'stack' : 'mid');
@@ -156,14 +177,14 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     const l = layoutRef.current;
     if (l === 'wide') setInspHidden(false);
     else if (l === 'mid') setDrawer(true);
-    else if (scroll) document.querySelector('.ed-right')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-  }, []);
+    else setPane('insp');
+  }, [setPane]);
   const toggleInspector = () => {
     if (layout === 'wide') setInspHidden((h) => !h);
     else if (layout === 'mid') setDrawer((d) => !d);
-    else document.querySelector('.ed-right')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else setPane('insp');
   };
-  const inspVisible = layout === 'wide' ? !inspHidden : layout === 'mid' ? drawer : true;
+  const inspVisible = layout === 'wide' ? !inspHidden : layout === 'mid' ? drawer : pane === 'insp';
 
   /* ---------- expand / collapse with an exit phase ---------- */
   const openRef = useRef(open);
@@ -290,11 +311,13 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
       bl.splice(ctaAt < 0 ? bl.length : ctaAt, 0, b);
       return { ...x, blocks: bl };
     });
+    if (layoutRef.current === 'stack') setPane('content');
     setOpen(b.id);
     flash([b.id]);
     setTimeout(() => document.getElementById(`blk-${b.id}`)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' }), 60);
   };
   const focusBlock = (id: string) => {
+    if (layoutRef.current === 'stack') setPane('content');
     setOpen(id);
     flash([id]);
     setTimeout(() => document.getElementById(`blk-${id}`)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' }), 30);
@@ -440,8 +463,8 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     const el = inspBody.current;
     if (el && tab === 'ai') el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' });
   }, [chat.length, thinking, proposal, tab]);
-  const autosize = (el: HTMLTextAreaElement | null) => { if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 168)}px`; };
-  useEffect(() => { autosize(inputRef.current); }, [instr]);
+  const autosize = (el: HTMLTextAreaElement | null) => { if (!el || el.offsetParent === null) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 168)}px`; };
+  useEffect(() => { autosize(inputRef.current); }, [instr, pane, tab, layout, drawer, inspHidden]);
 
   /* ---------- subjects ---------- */
   const [subs, setSubs] = useState<{ subjects: string[]; waHooks: string[] } | null>(null);
@@ -520,8 +543,19 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   const phase: 'check' | 'checking' | 'fix' | 'approve' | 'send' | 'sent' =
     locked ? 'sent' : approved && !morph ? 'send' : checking ? 'checking' : approving || morph ? 'approve' : !checks || stale ? 'check' : blocking.length ? 'fix' : 'approve';
   const nBlock = blocking.length;
-  const approveWhy = phase === 'fix' ? `${nBlock} ${nBlock === 1 ? 'check blocks' : 'checks block'} approval` : 'Run the checks first. Approve unlocks when nothing blocks it.';
   const sendWhy = 'Approve first to send to everyone. You can still send yourself a test.';
+  /* The same weekly-flow model as Home and Editions: one stepper, one next step, the same words. */
+  const stage: FlowStage | 'done' = phase === 'sent' ? 'done' : phase === 'send' ? 'send' : phase === 'approve' ? 'approve' : 'check';
+  const flow = flowState({ id: edition.id, status, updated_at: editedAt, checks: checks ? { ...checks, at: checkedAt } : null, overrides });
+  const nextStep = (
+    phase === 'check' || phase === 'checking'
+      ? <button type="button" className="btn primary flow-now" onClick={runChecks} disabled={checking} title={flow.detail}>{checking ? <><span className="spin" />Checking…</> : <><I.shield size={15} />Run all checks</>}</button>
+      : phase === 'fix'
+        ? <button type="button" className="btn flow-now issue" onClick={() => reveal('checks', true)} title={flow.detail}><span className="flow-n tnum">{nBlock}</span>{nBlock === 1 ? 'Fix 1 issue' : `Fix ${nBlock} issues`}</button>
+        : phase === 'approve'
+          ? <MorphButton morph={morph} busy={approving} onClick={() => setStatusAction('approve')}>Approve</MorphButton>
+          : <a className="btn primary flow-now" href={sendHref} onClick={(e) => { e.preventDefault(); go(sendHref); }}>{locked ? 'Results →' : status === 'scheduled' ? 'View schedule →' : 'Send →'}</a>
+  );
 
   /* Keep the sticky panes clear of the toolbar, whatever its height (it wraps on narrow screens). */
   const edRef = useRef<HTMLDivElement>(null);
@@ -529,8 +563,9 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   useLayoutEffect(() => {
     const bar = barRef.current, ed = edRef.current;
     if (!bar || !ed) return;
+    // The toolbar's page-coloured strip is pinned at top: 0, so the panes stick just below its bottom edge.
     const set = () => {
-      ed.style.setProperty('--ed-top', `${Math.round((parseFloat(getComputedStyle(bar).top) || 0) + bar.offsetHeight + 14)}px`);
+      ed.style.setProperty('--ed-top', `${Math.round(bar.getBoundingClientRect().height + 18)}px`);
       // Pane height from where the panes sit before scrolling, so the preview footer is never cut off at rest.
       const shell = ed.querySelector<HTMLElement>('.ed-shell');
       if (shell) ed.style.setProperty('--ed-rest', `${Math.round(shell.getBoundingClientRect().top + window.scrollY)}px`);
@@ -539,16 +574,25 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     const ro = new ResizeObserver(set);
     ro.observe(bar);
     window.addEventListener('resize', set);
-    return () => { ro.disconnect(); window.removeEventListener('resize', set); };
+    window.addEventListener('scroll', set, { passive: true });
+    return () => { ro.disconnect(); window.removeEventListener('resize', set); window.removeEventListener('scroll', set); };
   }, []);
 
-  /* Glass hairline only once content scrolls under the toolbar. */
+  /* Glass hairline only once content scrolls under the toolbar; on narrow screens the small title appears
+     in the bar once the large title has scrolled away beneath it. */
   const [scrolled, setScrolled] = useState(false);
+  const [titled, setTitled] = useState(false);
+  const headRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 4);
+    const on = () => {
+      setScrolled(window.scrollY > 4);
+      const h = headRef.current, bar = barRef.current;
+      setTitled(!!h && !!bar && h.offsetParent !== null && h.getBoundingClientRect().bottom < bar.getBoundingClientRect().bottom);
+    };
     on();
     window.addEventListener('scroll', on, { passive: true });
-    return () => window.removeEventListener('scroll', on);
+    window.addEventListener('resize', on);
+    return () => { window.removeEventListener('scroll', on); window.removeEventListener('resize', on); };
   }, []);
 
   const [keysOpen, setKeysOpen] = useState(false);
@@ -556,18 +600,21 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   const closeKeys = useCallback(() => setKeysOpen(false), []);
 
   return (
-    <div className="ed" ref={edRef}>
-      {/* ---------- Toolbar ---------- */}
-      <div className={`statusbar ed-bar ${scrolled ? 'scrolled' : ''}`} ref={barRef}>
+    <div className="ed ed-route" ref={edRef}>
+      {/* ---------- Toolbar: pinned to the top on a page-coloured strip, so nothing shows above or behind it ---------- */}
+      <div className={`ed-top ${scrolled ? 'scrolled' : ''} ${titled ? 'titled' : ''}`} ref={barRef}>
+      <div className="statusbar ed-bar">
         <div className="tb-l">
           <a href="/app/editions" className="tb-back" onClick={(e) => { e.preventDefault(); go('/app/editions'); }} aria-label="Back to editions"><I.back size={17} /><span>Editions</span></a>
           <span className="tb-sep" aria-hidden />
           <span className="tb-num tnum">{edNo(edition.number)}</span>
-          <h1 title={c.title}>{c.title || 'Untitled edition'}</h1>
+          <h1 className="tb-title" title={c.title}>{c.title || 'Untitled edition'}</h1>
+          <span className="tb-mini" aria-hidden>{c.title || 'Untitled edition'}</span>
           <StatusSwap status={status} />
           {!locked && <SaveState save={save} onRetry={() => doSave(latest.current)} />}
         </div>
         <div className="tb-r">
+          <div className="tb-flow"><FlowStepper current={stage} compact /></div>
           <div className="tb-tools">
             <button type="button" className={`icon-btn tb-insp ${inspVisible ? 'on' : ''}`} onClick={toggleInspector} aria-pressed={inspVisible} title={inspVisible ? 'Hide inspector' : 'Show inspector'} aria-label="Inspector">
               <I.sidebar />{tally.fails > 0 && <span className="badge-dot" aria-hidden />}
@@ -580,6 +627,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                 <button type="button" role="menuitem" onClick={() => { setMenu(false); setOpen(null); }}><I.collapse size={16} /><span>Collapse all blocks</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>.</Kbd></span></button>
                 {!locked && <button type="button" role="menuitem" onClick={() => { setMenu(false); reveal('ai', true); setTimeout(() => inputRef.current?.focus(), 80); }}><I.sparkle size={16} /><span>Ask the copilot</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>↵</Kbd></span></button>}
                 {!locked && checks && !checking && <button type="button" role="menuitem" onClick={() => { setMenu(false); runChecks(); }}><I.refresh size={16} /><span>Run the checks again</span></button>}
+                {!locked && !approved && <a role="menuitem" href={sendHref} onClick={(e) => { e.preventDefault(); setMenu(false); go(sendHref); }}><I.mail size={16} /><span>Send yourself a test</span></a>}
                 <a role="menuitem" href={`${publicUrl}?preview=1`} target="_blank" rel="noreferrer" onClick={() => setMenu(false)}><I.external size={16} /><span>Open reader page</span></a>
                 <form action={duplicateAction}><button type="submit" role="menuitem"><I.copy size={16} /><span>Duplicate edition</span></button></form>
                 {!locked && approved && <><div className="menu-sep" /><button type="button" role="menuitem" onClick={() => { setMenu(false); setStatusAction('unapprove'); }}><I.back size={16} /><span>Unapprove (back to review)</span></button></>}
@@ -587,28 +635,21 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
               </Popover>
             </span>
           </div>
-          <nav className={`ed-flow is-${phase}`} aria-label="Next step">
-            {/* 1 · checks */}
-            {phase === 'check' || phase === 'checking'
-              ? <button type="button" className="btn primary flow-now" onClick={runChecks} disabled={checking}>{checking ? <><span className="spin" />Checking…</> : <><I.shield size={15} />Run all checks</>}</button>
-              : phase === 'fix'
-                ? <button type="button" className="flow-st issue" onClick={() => reveal('checks', true)} title="Show what needs fixing"><span className="flow-n tnum">{nBlock}</span>{nBlock === 1 ? 'Issue to fix' : 'Issues to fix'}</button>
-                : <span className="flow-st done" title={checks ? `Checked ${when(checks.at)}` : undefined}><I.check size={13} />Checked</span>}
-            <I.chevron size={12} className="flow-sep" />
-            {/* 2 · approve */}
-            {phase === 'approve'
-              ? <MorphButton morph={morph} busy={approving} onClick={() => setStatusAction('approve')}>Approve</MorphButton>
-              : phase === 'send' || phase === 'sent'
-                ? <span className="flow-st done"><I.check size={13} />Approved</span>
-                : <button type="button" className="flow-st" aria-disabled="true" title={approveWhy} onClick={() => setNote({ kind: 'warn', text: approveWhy })}>Approve</button>}
-            <I.chevron size={12} className="flow-sep" />
-            {/* 3 · send */}
-            {phase === 'send' || phase === 'sent'
-              ? <a className="btn primary flow-now" href={sendHref} onClick={(e) => { e.preventDefault(); go(sendHref); }}>{locked ? 'Results →' : 'Send →'}</a>
-              : <a className="flow-st" href={sendHref} title={sendWhy} onClick={(e) => { e.preventDefault(); go(sendHref); }}>Send →</a>}
-          </nav>
+          <div className={`ed-flow is-${phase}`} aria-label="Next step" role="group">
+            {!approved && !locked && <a className="flow-st" href={sendHref} title={sendWhy} onClick={(e) => { e.preventDefault(); go(sendHref); }}>Send →</a>}
+            {nextStep}
+          </div>
         </div>
       </div>
+      </div>
+
+      {/* ---------- Large title (narrow screens): title, status and where it is in the weekly flow ---------- */}
+      <header className="ed-head">
+        <div className="eyebrow">Edition {edition.number}{planned ? ` · Planned for ${fmtDay(planned)}` : ''}</div>
+        <h1 ref={headRef}>{c.title || 'Untitled edition'}</h1>
+        <div className="ed-head-m"><StatusSwap status={status} /><span className="ed-head-next">{phase === 'sent' ? 'Sent · read-only' : status === 'scheduled' ? flow.detail : `Next: ${flow.title}`}</span></div>
+        <FlowStepper current={stage} />
+      </header>
       {locked && (
         <div className="notice ed-locked">
           <span className="ni" aria-hidden><I.lock size={12} /></span>
@@ -616,7 +657,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
           <form action={duplicateAction}><button type="submit" className="btn sm">Duplicate</button></form>
         </div>
       )}
-      <div className={`ed-shell ed-v2 ${inspHidden ? 'no-insp' : ''}`}>
+      <div className={`ed-shell ed-v2 ${inspHidden ? 'no-insp' : ''}`} data-pane={pane}>
         {/* ---------- LEFT: content ---------- */}
         <div className="ed-col ed-left">
           <div className="pane-h">
@@ -648,7 +689,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                 <div className="grp-h">Page</div>
                 <label className="f"><span>Theme label (kicker)</span><input className="in" value={c.kicker} onChange={(e) => set({ kicker: e.target.value })} placeholder="e.g. Q3 in numbers" /></label>
                 <label className="f"><span>Headline <Count n={c.title.length} max={60} /></span><input className="in" value={c.title} onChange={(e) => set({ title: e.target.value })} /></label>
-                <label className="f"><span>Subtitle</span><textarea className="in" rows={2} value={c.dek} onChange={(e) => set({ dek: e.target.value })} /></label>
+                <label className="f"><span>Subtitle</span><Area rows={2} value={c.dek} onChange={(e) => set({ dek: e.target.value })} /></label>
                 <div className="form-grid">
                   <label className="f"><span>Read time (min)</span><input className="in" type="number" min={1} max={15} value={c.readMinutes} onChange={(e) => set({ readMinutes: Number(e.target.value) || 3 })} /></label>
                   <label className="f"><span>Planned send date</span><input className="in" type="date" value={planned} onChange={(e) => { dirtyPlanned.current = true; setPlanned(e.target.value); }} /></label>
@@ -664,7 +705,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                   </div>
                 )}
                 <div className="grp-h">WhatsApp & link preview</div>
-                <label className="f"><span>WhatsApp message <Count n={c.waText.length} unit=" chars" /></span><textarea className="in" rows={5} value={c.waText} onChange={(e) => set({ waText: e.target.value })} /><small className={c.waText.includes('{link}') ? '' : 'warn-t'}>{c.waText.includes('{link}') ? 'Includes {link}, replaced by each person’s link.' : 'Must include {link}.'}</small></label>
+                <label className="f"><span>WhatsApp message <Count n={c.waText.length} unit=" chars" /></span><Area rows={3} value={c.waText} onChange={(e) => set({ waText: e.target.value })} /><small className={c.waText.includes('{link}') ? '' : 'warn-t'}>{c.waText.includes('{link}') ? 'Includes {link}, replaced by each person’s link.' : 'Must include {link}.'}</small></label>
                 <label className="f"><span>Link-preview title <Count n={c.preview.title.length} max={60} /></span><input className="in" value={c.preview.title} onChange={(e) => set({ preview: { ...c.preview, title: e.target.value } })} /></label>
                 <label className="f"><span>Link-preview description <Count n={c.preview.description.length} max={110} /></span><input className="in" value={c.preview.description} onChange={(e) => set({ preview: { ...c.preview, description: e.target.value } })} /></label>
               </>)}
@@ -793,7 +834,10 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                       <span className="cp-orb" aria-hidden><I.sparkle size={22} /></span>
                       <b>What should change?</b>
                       <span className="hint">Ask for any change: “shorten story 2”, “add a line on Pune”, “make the WhatsApp text friendlier”. You’ll see the changes before anything is applied.</span>
-                      {!locked && <div className="cp-quick">{QUICK.map((q, i) => <button type="button" key={q} style={{ animationDelay: `${60 + i * 35}ms` }} onClick={() => ask(q)}><I.sparkle size={12} />{q}</button>)}</div>}
+                      {!locked && <div className={`cp-quick ${aiReady ? '' : 'demo'}`}>
+                        {QUICK.map((q, i) => <button type="button" key={q} style={{ animationDelay: `${60 + i * 35}ms` }} disabled={!aiReady} title={aiReady ? undefined : 'Suggestions need an AI provider'} onClick={() => ask(q)}>{q}</button>)}
+                        {!aiReady && <span className="hint cp-why">Suggestions need an AI provider. You can still type an instruction to try the demo.</span>}
+                      </div>}
                     </div>
                   ) : (
                     <div className="chat">
@@ -875,7 +919,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
 
             {tab === 'ai' && !locked && (
               <div className="insp-f composer">
-                {chat.length > 0 && <div className="cp-chips">{QUICK.map((q) => <button type="button" key={q} className="chip" onClick={() => ask(q)} disabled={thinking}>{q}</button>)}</div>}
+                {chat.length > 0 && aiReady && <div className="cp-chips">{QUICK.map((q) => <button type="button" key={q} className="chip" onClick={() => ask(q)} disabled={thinking}>{q}</button>)}</div>}
                 <div className="cp-box">
                   <div className="cp-target">
                     <span>Apply to</span>
@@ -895,6 +939,16 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
           </div>
         </aside>
       </div>
+
+      {/* ---------- Bottom bar (narrow screens): pane switcher + the one next step ---------- */}
+      <nav className="ed-dock" aria-label="Editor">
+        <Segmented className="ed-panes" label="Show" value={pane} onChange={setPane} options={[
+          { value: 'content', label: 'Content' },
+          { value: 'preview', label: 'Preview' },
+          { value: 'insp', label: <>Copilot{tally.fails > 0 && <span className="tab-badge bad">{tally.fails}</span>}</> },
+        ]} />
+        <div className="ed-dock-next">{nextStep}</div>
+      </nav>
 
       {/* ---------- Toasts ---------- */}
       <div className="ed-toasts" role="status" aria-live="polite">
@@ -1018,6 +1072,28 @@ function SourcePicker({ ids, c, onChange }: { ids: string[]; c: EditionContent; 
   );
 }
 
+/** Textarea that grows with its text instead of scrolling or showing a resize grip; `rows` is the resting minimum. */
+function Area(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)}px`;
+  }, []);
+  useLayoutEffect(fit, [props.value, fit]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let w = el.offsetWidth;
+    const ro = new ResizeObserver(() => { if (el.offsetWidth !== w) { w = el.offsetWidth; fit(); } });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit]);
+  return <textarea {...props} ref={ref} className={`in grow ${props.className || ''}`} />;
+}
+
 const XBtn = ({ onClick, label }: { onClick: () => void; label: string }) => <button type="button" className="icon-btn sm" aria-label={label} title={label} onClick={onClick}><I.close size={13} /></button>;
 
 function BlockForm({ b, c, kb, stories, setBlock, setC }: { b: Block; c: EditionContent; kb: KB[]; stories: Story[]; setBlock: (id: string, p: any) => void; setC: React.Dispatch<React.SetStateAction<EditionContent>> }) {
@@ -1027,22 +1103,22 @@ function BlockForm({ b, c, kb, stories, setBlock, setC }: { b: Block; c: Edition
       return <>
         <label className="f"><span>Label</span><input className="in" value={b.heading || ''} onChange={(e) => up({ heading: e.target.value })} /></label>
         <div className="f"><span className="flbl">Bullets</span>
-          {b.bullets.map((x, i) => <div key={i} className="row lst"><span className="lst-n">{i + 1}</span><textarea className="in" rows={2} style={{ flex: 1 }} value={x} onChange={(e) => up({ bullets: b.bullets.map((y, j) => (j === i ? e.target.value : y)) })} /><XBtn label="Remove bullet" onClick={() => up({ bullets: b.bullets.filter((_, j) => j !== i) })} /></div>)}
+          {b.bullets.map((x, i) => <div key={i} className="row lst"><span className="lst-n">{i + 1}</span><Area rows={2} style={{ flex: 1 }} value={x} onChange={(e) => up({ bullets: b.bullets.map((y, j) => (j === i ? e.target.value : y)) })} /><XBtn label="Remove bullet" onClick={() => up({ bullets: b.bullets.filter((_, j) => j !== i) })} /></div>)}
         </div>
         <button type="button" className="btn sm add-row" onClick={() => up({ bullets: [...b.bullets, ''] })}><I.plus size={12} />Add bullet</button>
       </>;
     case 'stat':
       return <>
         <label className="f"><span>Number</span><input className="in big" value={b.value} onChange={(e) => up({ value: e.target.value })} placeholder="e.g. 1.14 lakh" /></label>
-        <label className="f"><span>What it means</span><textarea className="in" rows={2} value={b.caption} onChange={(e) => up({ caption: e.target.value })} /></label>
+        <label className="f"><span>What it means</span><Area rows={2} value={b.caption} onChange={(e) => up({ caption: e.target.value })} /></label>
         <SourcePicker ids={b.sourceIds} c={c} onChange={(ids) => up({ sourceIds: ids })} />
       </>;
     case 'story': {
       const words = b.body.split(/\s+/).filter(Boolean).length;
       return <>
         <label className="f"><span>Headline</span><input className="in" value={b.headline} onChange={(e) => up({ headline: e.target.value })} /></label>
-        <label className="f"><span>Story <small className={`cnt ${words && (words < 60 || words > 90) ? 'over' : ''}`}>{words} words · aim for 60–90</small></span><textarea className="in" rows={6} value={b.body} onChange={(e) => up({ body: e.target.value })} /></label>
-        <label className="f"><span>Why it matters for you</span><textarea className="in" rows={3} value={b.why} onChange={(e) => up({ why: e.target.value })} /></label>
+        <label className="f"><span>Story <small className={`cnt ${words && (words < 60 || words > 90) ? 'over' : ''}`}>{words} words · aim for 60–90</small></span><Area rows={3} value={b.body} onChange={(e) => up({ body: e.target.value })} /></label>
+        <label className="f"><span>Why it matters for you</span><Area rows={3} value={b.why} onChange={(e) => up({ why: e.target.value })} /></label>
         <label className="check tgl"><input type="checkbox" className="toggle" checked={!!b.opinion} onChange={(e) => up({ opinion: e.target.checked })} /><span>This is our opinion<small>Shows an “Our view” label; no statistics allowed.</small></span></label>
         {!b.opinion && <SourcePicker ids={b.sourceIds} c={c} onChange={(ids) => up({ sourceIds: ids })} />}
       </>;
@@ -1087,7 +1163,7 @@ function BlockForm({ b, c, kb, stories, setBlock, setC }: { b: Block; c: Edition
         </div>
         <div className="notice mat-note"><span className="ni" aria-hidden>i</span><div><b>{st.label}</b> may say {st.allowed}.{st.banned.length ? <> Never: {st.banned.map((x) => `“${x}”`).join(', ')}.</> : null}</div></div>
         <label className="f"><span>Title</span><input className="in" value={b.title} onChange={(e) => up({ title: e.target.value, placeholder: false })} /></label>
-        <label className="f"><span>Text (problem → what it does → approved result)</span><textarea className="in" rows={4} value={b.body} onChange={(e) => up({ body: e.target.value, placeholder: false })} /></label>
+        <label className="f"><span>Text (problem → what it does → approved result)</span><Area rows={3} value={b.body} onChange={(e) => up({ body: e.target.value, placeholder: false })} /></label>
         <label className="f"><span>Image or short video URL</span><MediaInput value={b.mediaUrl || ''} onChange={(v) => up({ mediaUrl: v || undefined })} /></label>
         <label className="f"><span>Button label</span><input className="in" value={b.cta} onChange={(e) => up({ cta: e.target.value })} /></label>
       </>;
@@ -1107,14 +1183,14 @@ function BlockForm({ b, c, kb, stories, setBlock, setC }: { b: Block; c: Edition
       </>;
     case 'quote':
       return <>
-        <label className="f"><span>Quote</span><textarea className="in" rows={3} value={b.text} onChange={(e) => up({ text: e.target.value })} /></label>
+        <label className="f"><span>Quote</span><Area rows={3} value={b.text} onChange={(e) => up({ text: e.target.value })} /></label>
         <label className="f"><span>Who said it</span><input className="in" value={b.author} onChange={(e) => up({ author: e.target.value })} /></label>
         <div className="hint">Only quote people with their permission or from a published source.</div>
       </>;
     case 'text':
       return <>
         <label className="f"><span>Heading</span><input className="in" value={b.heading} onChange={(e) => up({ heading: e.target.value })} /></label>
-        <label className="f"><span>Text (blank line = new paragraph)</span><textarea className="in" rows={6} value={b.body} onChange={(e) => up({ body: e.target.value })} /></label>
+        <label className="f"><span>Text (blank line = new paragraph)</span><Area rows={3} value={b.body} onChange={(e) => up({ body: e.target.value })} /></label>
       </>;
     case 'poll':
       return <>
