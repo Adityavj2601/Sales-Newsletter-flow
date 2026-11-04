@@ -98,23 +98,14 @@ export function Confirm({ action, label, confirmLabel = 'Yes, do it', className 
 
 /* ---------- Shell: sidebar navigation, product switcher, mobile drawer ---------- */
 
-/** True while the editor has collapsed the sidebar into an icon rail (it puts `ed-route` on <body>). */
-function useRail() {
-  const [rail, setRail] = useState(false);
-  useEffect(() => {
-    const b = document.body;
-    const sync = () => setRail(b.classList.contains('ed-route'));
-    sync();
-    const mo = new MutationObserver(sync);
-    mo.observe(b, { attributes: true, attributeFilter: ['class'] });
-    return () => mo.disconnect();
-  }, []);
-  return rail;
+/** True on the editor route, where editor.css collapses the sidebar into an icon rail (`.shell:has(.ed-route)`). */
+function useRail(path: string | null) {
+  return /^\/app\/editions\/[^/]+\/?$/.test(path || '');
 }
 
 export function Nav({ counts }: { counts: Record<string, number> }) {
   const path = usePathname();
-  const rail = useRail();
+  const rail = useRail(path);
   const ref = useRef<HTMLElement>(null);
   const [ind, setInd] = useState<{ y: number; h: number; ready: boolean } | null>(null);
   // One highlight that glides between items (macOS source-list feel) instead of each link fading on its own.

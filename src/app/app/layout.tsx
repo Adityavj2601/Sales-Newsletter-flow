@@ -48,7 +48,7 @@ export default async function StudioLayout({ children }: { children: React.React
     <div className="shell">
       <a className="skip-link" href="#main">Skip to content</a>
       {/* Every item is icon + text in its own span, with an accessible name on the control itself,
-          so the editor can collapse this into an icon-only rail (`.ed-route .side`) without losing labels. */}
+          so the editor can collapse this into an icon-only rail (`.shell:has(.ed-route) .side`) without losing labels. */}
       <aside className="side" id="sidebar" aria-label="Sidebar">
         <div className="brand">
           <span className="brand-mark" aria-hidden title={g.appName}><Icon name="editions" size={16} strokeWidth={2} /></span>
