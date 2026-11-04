@@ -9,6 +9,7 @@ import { getProduct, baseUrl, getSetting } from '@/lib/settings';
 import { fmtDay, fmtTime, edNo } from '@/lib/format';
 import { editionMetrics, pollResults, pct } from '@/lib/metrics';
 import { StatusPill, Score } from '@/components/bits';
+import { StatTile, editionTiles } from '@/components/StatTile';
 import { Icon } from '@/components/people/Icon';
 import { Avatar } from '@/components/people/Avatar';
 import { Rel } from '@/components/people/Rel';
@@ -44,11 +45,7 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
   const p = getProduct(e.product_id)!;
   const tz = getSetting('general').timezone;
   const m = editionMetrics([id]);
-  const { delivered, failed, opens, halfway: s50, finished: s100, avgTime, cta: ctaMap } = m;
-  const viewers = m.readers;
-  const anon = m.anonViews;
-  const byChannel = Object.entries(m.byChannel).map(([channel, n]) => ({ channel, n }));
-  const intents = m.intentPeople;
+  const { delivered, cta: ctaMap } = m;
   const show = m.showcase;
   const pollBlocks = e.content.blocks.filter((b) => b.type === 'poll') as any[];
   const people = all(`SELECT c.id, c.first_name, c.last_name, c.company, c.role, c.score, c.stage,
@@ -58,17 +55,13 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
   const notes = all("SELECT ev.meta, ev.type, ev.created_at, c.first_name, c.last_name, c.id AS cid FROM events ev LEFT JOIN contacts c ON c.id = ev.contact_id WHERE ev.edition_id = ? AND ev.meta LIKE '%\"note\"%' ORDER BY ev.created_at DESC", id);
   const max = Math.max(1, ...Object.values(ctaMap), ...show.map((s) => s.n));
   const kbTitle = (v: string) => get('SELECT title FROM kb_items WHERE id = ?', v)?.title || (e.content.blocks.find((b) => b.id === v) as any)?.title || v;
-  const chName = (c: string) => ({ email: 'Email', whatsapp: 'WhatsApp API', wa_manual: 'WhatsApp' } as any)[c] || c;
   const noteText = (meta: string) => { try { return JSON.parse(meta).note; } catch { return ''; } };
   const isSent = e.status === 'sent';
   const link = `${baseUrl()}/e/${p.slug}/${e.slug}`;
 
-  const funnel = [
-    { k: 'Delivered', n: delivered, icon: 'send', tone: '', d: byChannel.map((c) => `${chName(c.channel)}: ${c.n}`).join(' · ') || 'Nothing delivered yet' },
-    { k: 'Opened the page', n: viewers, icon: 'eye', tone: '', d: anon ? `+${anon} views via shared link` : `${opens} email ${opens === 1 ? 'open' : 'opens'} (approximate)` },
-    { k: 'Read past halfway', n: s50, icon: 'doc', tone: '', d: `${s100} reached the end${avgTime ? ` · avg ${avgTime}s on page` : ''}` },
-    { k: 'Showed interest', n: intents, icon: 'flame', tone: 'ok', d: m.anonIntents ? `+${m.anonIntents} taps via shared link` : 'Interested, booked or tapped Our work' },
-  ];
+  // The same four tiles as Home's “Last edition”; the funnel bars below reuse their numbers.
+  const tiles = editionTiles(m);
+  const funnel = tiles.map((t) => ({ k: t.label, n: t.value, tone: t.tone }));
 
   const __active = await activeProduct();
   return (
@@ -96,16 +89,7 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
       <section className="card" aria-labelledby="h-overview">
         <div className="card-head"><h2 id="h-overview">Overview</h2><span className="hint">Share of delivered · people with a personal link</span></div>
         <div className="grid4 res-tiles">
-          {funnel.map((f, i) => (
-            <div key={f.k} className="stat-tile">
-              <span className={`icon-chip ${f.tone}`} aria-hidden><Icon name={f.icon} size={16} /></span>
-              <div className="sv">{f.n.toLocaleString('en-IN')}</div>
-              <div className="sk">{f.k}</div>
-              {i === 0
-                ? <><div className="sm res-pct">{f.d}</div>{failed ? <div className="sm">{failed} failed</div> : null}</>
-                : <><div className="sm res-pct">{delivered ? `${pct(f.n, delivered)} of delivered` : 'Nothing delivered yet'}</div><div className="sm">{f.d}</div></>}
-            </div>
-          ))}
+          {tiles.map(({ key, ...t }) => <StatTile key={key} {...t} />)}
         </div>
       </section>
 

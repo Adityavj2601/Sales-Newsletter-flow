@@ -319,13 +319,6 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .kpi-h { display: grid; gap: 3px; min-width: 0; }
 .kpi-h .hint { font-size: 13px; }
 .kpi-h .sep { margin: 0 6px; color: var(--faint); }
-.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
-.kpi-grid .stat-tile { grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 3px; padding: 14px 16px 15px; align-self: start; }
-.kpi-grid .stat-tile .icon-chip { grid-column: 2; grid-row: 1; margin: 0; align-self: start; }
-.kpi-grid .stat-tile .sv { grid-column: 1; grid-row: 1; font-size: 28px; align-self: center; }
-.kpi-grid .stat-tile .sk, .kpi-grid .stat-tile .sm { grid-column: 1 / -1; min-width: 0; }
-.kpi-grid .stat-tile .sm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.k-pct { color: var(--faint); font-weight: 500; }
 .kpi-empty { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 14px; }
 .kpi-empty .ico { color: var(--faint); }
 
@@ -388,21 +381,12 @@ a.feed-title:hover { color: var(--accent); opacity: 1; }
 @media (max-width: 760px) {
   .checklist { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 700px) {
-  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
-  .kpi-grid .stat-tile { align-self: stretch; grid-template-rows: auto auto 1fr; }
-  .kpi-grid .stat-tile .sk { font-size: 12.5px; line-height: 1.35; }
-  .kpi-grid .stat-tile .sm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
-}
 @media (max-width: 560px) {
   .hero-title { font-size: 22px; }
   .next-step { grid-template-columns: 30px minmax(0, 1fr); }
   .next-step-cta { grid-column: 1 / -1; }
   .next-step-cta > *, .next-step-cta .btn { flex: 1; width: 100%; }
   .hero-actions .btn { flex: 1 1 auto; }
-  .kpi-grid .stat-tile { padding: 12px 14px 13px; }
-  .kpi-grid .stat-tile .sv { font-size: 24px; }
-  .kpi-h .hint .k-sh { display: none; }
   .person { grid-template-columns: 34px minmax(0, 1fr) 44px; }
   .status-list li { grid-template-columns: 8px 18px 72px minmax(0, 1fr); }
 }
@@ -619,6 +603,8 @@ a.ntitle:hover { color: var(--accent); opacity: 1; }
   /* A “⋯” menu keeps its icon size beside a full-width primary. */
   .pg > .ph > .row:has(> .ph-more) { grid-template-columns: minmax(0, 1fr); grid-auto-columns: auto; }
   .pg > .ph > .row > .ph-more { justify-self: end; }
+  /* Same 48px phone ⋯ as the Contact header */
+  .pg > .ph > .row > .ph-more .so-more { width: 48px; }
 }
 /* Group headings in this area align with the card edge. */
 :is(.home, .st, .so, .kw, .au, .se, .notif-page, .outbox) .group-title { margin: 0; }
@@ -628,6 +614,6 @@ a.ntitle:hover { color: var(--accent); opacity: 1; }
 .cmdk-field input:focus, .cmdk-field input:focus-visible { outline: none; box-shadow: none; border-radius: 0; }
 .cmdk-lbl mark { font-weight: 700; color: var(--ink); }
 .cmdk-item[aria-selected="true"] .cmdk-lbl mark { color: #fff; }
-/* Page-header “⋯” menu: a round fill button the height of its neighbours */
-.ph-more .so-more { width: 36px; height: 36px; background: var(--fill); color: var(--ink); }
+/* Page-header “⋯” menu: the same box as the Contact / Results ⋯ (a .btn: 36 × 34, 10px corners) */
+.ph-more .so-more { width: 36px; height: 34px; border-radius: 10px; background: var(--fill); color: var(--ink); }
 .ph-more .so-more:hover, .ph-more .so-more[aria-expanded="true"] { background: var(--fill-2); }

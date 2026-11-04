@@ -327,6 +327,22 @@ details.pmenu[open] > summary { background: var(--fill-2); }
 .pmenu-body > .menu-danger form { display: flex !important; gap: 6px; padding: 3px; }
 .pmenu-body > .menu-danger form .btn { flex: 1; justify-content: center; }
 .pmenu-body > .menu-danger form .btn.danger { background: var(--bad); color: #fff; }
+/* Button items (Copy email, Unsubscribe…) read exactly like the link items; a hairline sets Delete apart. */
+.pmenu-body > .pmenu-i { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; text-align: left; white-space: nowrap; cursor: pointer; }
+.pmenu-body > .pmenu-i .ic-svg { color: var(--muted); flex: none; }
+.pmenu-body > .pmenu-i:hover, .pmenu-body > .pmenu-i:focus-visible { background: var(--accent-fill); color: #fff; outline: none; box-shadow: none; }
+.pmenu-body > .pmenu-i:hover .ic-svg, .pmenu-body > .pmenu-i:focus-visible .ic-svg { color: #fff; }
+.pmenu-sep { display: block; height: 0.5px; margin: 5px 8px; background: var(--line); }
+/* Delete keeps the icon column of the items above it (Confirm renders a text-only button, so the glyph is drawn here). */
+.pmenu-body > .menu-danger > .btn { gap: 10px; }
+.pmenu-body > .menu-danger > .btn::before {
+  content: ""; flex: none; width: 15px; height: 15px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l1-13'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l1-13'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.pmenu-confirm { display: grid; gap: 10px; padding: 8px 10px 6px; max-width: 260px; font-size: 13px; line-height: 1.4; color: var(--muted); white-space: normal; }
+.pmenu-confirm-row { display: flex; gap: 6px; }
+.pmenu-confirm-row .btn { flex: 1; justify-content: center; }
 .res-pct { color: var(--muted); font-weight: 500; }
 .res-tiles .stat-tile .sk { margin-bottom: 2px; }
 .ph .sub .sep { margin: 0 7px; color: var(--faint); }
@@ -656,9 +672,13 @@ textarea.in.pnote-in { min-height: 0; resize: none; padding: 9px 12px; font-size
 /* ---------- Small screens ---------- */
 @media (max-width: 700px) {
   .snd-hero { padding: 18px; }
-  .snd-sum { grid-template-columns: auto minmax(0, 1fr); }
-  .snd-sum > .pill { grid-column: 2; justify-self: start; }
-  .snd-sum-ic { width: 38px; height: 38px; }
+  /* The status pill ends the title line (title takes the room, pill sits at the end); the description runs full width below. */
+  .snd-sum { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ic h pill" "ic d d"; column-gap: 12px; row-gap: 2px; align-items: start; }
+  .snd-sum-t { display: contents; }
+  .snd-sum-ic { grid-area: ic; width: 38px; height: 38px; }
+  .snd-sum-t h2 { grid-area: h; align-self: center; min-width: 0; }
+  .snd-sum-t p { grid-area: d; margin: 0; }
+  .snd-sum > .pill { grid-area: pill; align-self: center; }
   .snd-ready { grid-template-columns: minmax(0, 1fr); }
   .snd-ready li + li { box-shadow: inset 0 0.5px 0 var(--line); }
   .snd-ready li > .snd-dot, .snd-ready-a > .snd-dot { margin: 12px 0 0 14px; }

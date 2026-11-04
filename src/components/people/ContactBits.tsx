@@ -76,3 +76,38 @@ export function ConsentSwitches({ action, c }: { action: (fd: FormData) => Promi
     </form>
   );
 }
+
+/** ⋯ menu item: copies a value and says so in place (“Copied ✓”) for a moment. */
+export function CopyMenuItem({ text, label, icon = 'mail' }: { text: string; label: string; icon?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button type="button" className="pmenu-i" onClick={async () => {
+      try { await navigator.clipboard.writeText(text); } catch {
+        const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      setDone(true); setTimeout(() => setDone(false), 1600);
+    }}>
+      <Icon name={icon} size={15} /><span aria-live="polite">{done ? 'Copied ✓' : label}</span>
+    </button>
+  );
+}
+
+/**
+ * ⋯ menu item: unsubscribe this one person from every channel through the Contacts bulk action
+ * (status “unsubscribed”, email and WhatsApp consent off), behind an in-place confirm step.
+ */
+export function UnsubscribeMenuItem({ id, name, action }: { id: string; name: string; action: (fd: FormData) => Promise<void> }) {
+  const [ask, setAsk] = useState(false);
+  if (!ask) return <button type="button" className="pmenu-i" onClick={() => setAsk(true)}><Icon name="x" size={15} />Unsubscribe from all…</button>;
+  return (
+    <form action={action} className="pmenu-confirm">
+      <input type="hidden" name="ids" value={id} />
+      <input type="hidden" name="bulk" value="unsubscribe" />
+      <span>{name} stops getting email and WhatsApp. Only resubscribe them if they ask.</span>
+      <span className="pmenu-confirm-row">
+        <button type="button" className="btn sm" onClick={() => setAsk(false)}>Cancel</button>
+        <Submit className="btn sm danger" pending="Unsubscribing…">Unsubscribe</Submit>
+      </span>
+    </form>
+  );
+}

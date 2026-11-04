@@ -8,11 +8,12 @@ import { listEditions } from '@/lib/editions';
 import { flowState } from '@/lib/flow';
 import { FlowStepper } from '@/components/FlowStepper';
 import { fmtDay, fmtTime, edNo, relDay, todayIn, TZ_DEFAULT, WEEKDAYS } from '@/lib/format';
-import { editionMetrics, pct } from '@/lib/metrics';
+import { editionMetrics } from '@/lib/metrics';
 import { StatusPill, Avatar } from '@/components/bits';
-import { Icon, type IconName } from '@/components/shell/icons';
+import { Icon } from '@/components/shell/icons';
 import { KindIcon, cleanTitle, typo } from '@/components/shell/kinds';
 import { SeenNumber, Ago } from '@/components/shell/Motion';
+import { StatTile, editionTiles } from '@/components/StatTile';
 import { JOB_INFO } from '@/lib/jobs';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,6 @@ export const metadata = { title: 'Home' };
 const clock = (hhmm: string) => fmtTime(`2000-01-01T${/^\d{1,2}:\d{2}$/.test(hhmm) ? hhmm.padStart(5, '0') : '10:00'}:00Z`, 'UTC');
 /** The calendar day of an instant in the app's time zone. */
 const zonedDay = (iso: string, tz: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
-const CHANNEL: Record<string, string> = { email: 'Email', whatsapp: 'WhatsApp API', wa_manual: 'WhatsApp' };
 
 function Ring({ done, total, size = 96 }: { done: number; total: number; size?: number }) {
   const r = 34, c = 2 * Math.PI * r, off = c * (1 - done / total);
@@ -38,17 +38,6 @@ function Ring({ done, total, size = 96 }: { done: number; total: number; size?: 
 }
 
 /** The Results overview tile, compact: icon, number, label (· share of delivered), one meta line. */
-function Stat({ id, icon, value, label, share, meta, tone = '' }: { id: string; icon: IconName; value: number; label: string; share?: string; meta: string; tone?: string }) {
-  return (
-    <div className="stat-tile">
-      <span className={`icon-chip ${tone}`} aria-hidden><Icon name={icon} size={16} /></span>
-      <div className="sv"><SeenNumber id={id} value={value} /></div>
-      <div className="sk">{label}{share && <span className="k-pct"> · {share}</span>}</div>
-      <div className="sm" title={meta}>{meta}</div>
-    </div>
-  );
-}
-
 export default async function Home({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
   const p = await requireProduct();
   const user = await requireUser();
@@ -80,7 +69,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
 
   // The last sent edition, measured exactly like its Results overview (same tiles, same “of delivered”).
   const m = editionMetrics(lastSent ? [lastSent.id] : []);
-  const sent = m.delivered;
   const hot = all("SELECT * FROM contacts WHERE product_id = ? AND status = 'active' AND score > 0 ORDER BY (last_intent_at IS NOT NULL) DESC, last_intent_at DESC, score DESC LIMIT 5", p.id);
   // One row per edition send: “Sending #5” and “#5 sent” collapse into the latest of the two.
   const seenSend = new Set<string>();
@@ -187,23 +175,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
   );
 
   const sentDay = lastSent?.sent_at ? zonedDay(lastSent.sent_at, tz) : null;
-  const byCh = Object.entries(m.byChannel).map(([c, n]) => `${CHANNEL[c] || c}: ${n}`).join(' · ');
-  const of = (n: number) => (sent ? pct(n, sent) : undefined);
   const kpis = (
     <section className="card kpis" aria-labelledby="kpi-h">
       <div className="card-head">
         <div className="kpi-h">
           <h2 id="kpi-h">Last edition</h2>
-          {lastSent && <span className="hint">{edNo(lastSent.number)}<span className="sep" aria-hidden>·</span>Sent {sentDay ? relDay(sentDay, tz) : fmtDay(lastSent.sent_at, tz)}<span className="k-sh"><span className="sep" aria-hidden>·</span>% of delivered</span></span>}
+          {lastSent && <span className="hint">{edNo(lastSent.number)}<span className="sep" aria-hidden>·</span>Sent {sentDay ? relDay(sentDay, tz) : fmtDay(lastSent.sent_at, tz)}</span>}
         </div>
         {lastSent && <Link className="more" href={`/app/editions/${lastSent.id}/analytics`}>Results<Icon name="chevron" size={13} strokeWidth={2.2} /></Link>}
       </div>
       {lastSent ? (
-        <div className="kpi-grid">
-          <Stat id={`${p.id}:delivered`} icon="send" value={sent} label="Delivered" meta={`${byCh || 'Nothing delivered yet'}${m.failed ? ` · ${m.failed} failed` : ''}`} />
-          <Stat id={`${p.id}:readers`} icon="eye" value={m.readers} label="Opened the page" share={of(m.readers)} meta={m.anonViews ? `+${m.anonViews} views via shared link` : `${m.opens} email ${m.opens === 1 ? 'open' : 'opens'} (approximate)`} />
-          <Stat id={`${p.id}:halfway`} icon="doc" value={m.halfway} label="Read past halfway" share={of(m.halfway)} meta={`${m.finished} reached the end${m.avgTime ? ` · avg ${m.avgTime}s on page` : ''}`} />
-          <Stat id={`${p.id}:intent`} icon="leads" value={m.intentPeople} label="Showed interest" share={of(m.intentPeople)} tone="ok" meta={m.anonIntents ? `+${m.anonIntents} taps via shared link` : 'Interested, booked or tapped Our work'} />
+        <div className="grid4 res-tiles">
+          {editionTiles(m).map(({ key, value, ...t }) => <StatTile key={key} value={<SeenNumber id={`${p.id}:${key}`} value={value} />} {...t} />)}
         </div>
       ) : <p className="kpi-empty"><Icon name="chart" size={16} />Nothing sent yet. The numbers for each edition appear here after its first send.</p>}
     </section>

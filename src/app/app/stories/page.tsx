@@ -11,7 +11,8 @@ import { fetchNewsNow, addStory, setStoryStatus, clearOldStories } from '../acti
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Story pool' };
 
-const FILTERS = [['open', 'To review'], ['shortlisted', 'Shortlisted'], ['used', 'Used'], ['dismissed', 'Dismissed']] as const;
+/** [key, label, phone label]: on a phone the four segments share the width, so they get the short names. */
+const FILTERS = [['open', 'To review', 'Review'], ['shortlisted', 'Shortlisted', 'Shortlist'], ['used', 'Used', 'Used'], ['dismissed', 'Dismissed', 'Dismissed']] as const;
 const GOAL = 6;
 
 function ScoreRing({ n, reason }: { n: number | null; reason?: string | null }) {
@@ -102,7 +103,12 @@ export default async function Stories({ searchParams }: { searchParams: Promise<
 
       <div className="st-tools">
         <nav className="tabs st-filter" aria-label="Filter stories">
-          {FILTERS.map(([k, l]) => <Link key={k} href={qs(k)} aria-current={f === k ? 'page' : undefined} scroll={false}>{l}<span className="n tnum">{count(k)}</span></Link>)}
+          {FILTERS.map(([k, l, sl]) => (
+            <Link key={k} href={qs(k)} aria-current={f === k ? 'page' : undefined} scroll={false}>
+              {sl === l ? l : <><span className="st-fl">{l}</span><span className="st-fs">{sl}</span></>}
+              <span className={`n tnum${count(k) ? '' : ' zero'}`}>{count(k)}</span>
+            </Link>
+          ))}
         </nav>
         <form className="cx-search" role="search">
           <Icon name="search" size={15} />
