@@ -15,16 +15,20 @@ export function StageAction({ action, label, done, className = 'btn sm' }: { act
   );
 }
 
-/** Stage picker for a contact: a segmented row, the chosen stage slides in immediately. */
+/** Stage picker for a contact: the shared segmented control; the chosen stage moves immediately and saves behind it. */
 export function StagePicker({ stages, current, actions }: { stages: [string, string][]; current: string; actions: Record<string, () => Promise<void>> }) {
   const [sel, setSel] = useState(current);
   const [pending, start] = useTransition();
+  const pick = (k: string) => {
+    if (sel === k) return;
+    const prev = sel;
+    setSel(k);
+    start(async () => { try { await actions[k](); } catch { setSel(prev); } });
+  };
   return (
-    <div className="pstage" role="group" aria-label="Stage" aria-busy={pending}>
+    <div className="seg pstage" role="group" aria-label="Stage" aria-busy={pending}>
       {stages.map(([k, v]) => (
-        <form key={k} onSubmit={(e) => { e.preventDefault(); if (sel === k) return; const prev = sel; setSel(k); start(async () => { try { await actions[k](); } catch { setSel(prev); } }); }}>
-          <button aria-pressed={sel === k} className={`pstage-b s-${k}`}>{sel === k && <Icon name="check" size={13} stroke={2.4} />}{v}</button>
-        </form>
+        <button key={k} type="button" aria-pressed={sel === k} className={`s-${k}`} onClick={() => pick(k)}>{v}</button>
       ))}
     </div>
   );

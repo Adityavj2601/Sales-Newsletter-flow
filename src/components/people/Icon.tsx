@@ -29,10 +29,12 @@ const P: Record<string, React.ReactNode> = {
   briefcase: <><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" /><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17" /></>,
   pin: <><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z" /><circle cx="12" cy="10" r="2.3" /></>,
   building: <><path d="M4.5 20.5V5a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 14.5 5v15.5M14.5 9.5H18a1.5 1.5 0 0 1 1.5 1.5v9.5M3 20.5h18M8 7.5h3M8 11h3M8 14.5h3" /></>,
+  lock: <><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" /></>,
+  warn: <><path d="M12 4.5 2.8 19.5h18.4L12 4.5Z" /><path d="M12 10v4.2" /><circle cx="12" cy="16.9" r=".9" fill="currentColor" stroke="none" /></>,
   poll: <><rect x="4" y="5" width="16" height="3.5" rx="1.75" /><rect x="4" y="10.25" width="11" height="3.5" rx="1.75" /><rect x="4" y="15.5" width="6.5" height="3.5" rx="1.75" /></>,
 };
 export type IconName = keyof typeof P;
-export function Icon({ name, size = 16, className, stroke = 1.75 }: { name: string; size?: number; className?: string; stroke?: number }) {
+export function Icon({ name, size = 16, className, stroke = 1.7 }: { name: string; size?: number; className?: string; stroke?: number }) {
   return (
     <svg className={`ic-svg ${className || ''}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
       {P[name] || null}

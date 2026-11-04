@@ -10,7 +10,7 @@ export function EditSheet({ children, label = 'Edit', open: open0 = false }: { c
   const [open, setOpen] = useState(open0);
   return (
     <>
-      <button type="button" className="pc-act" onClick={() => setOpen(true)}><span className="pc-act-ic"><Icon name="pencil" size={18} /></span><span>{label}</span></button>
+      <button type="button" className="btn" onClick={() => setOpen(true)}><Icon name="pencil" size={15} />{label}</button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Edit contact" width={640}>{children}</Sheet>
     </>
   );
@@ -29,11 +29,11 @@ export function ConsentSwitches({ action, c }: { action: (fd: FormData) => Promi
     <form action={action} ref={ref} className="pgroup pc-consent">
       {keep.map((k) => <input key={k} type="hidden" name={k} value={c[k] ?? ''} />)}
       <label className="pswitch">
-        <span><span className="pc-ic tn-blue"><Icon name="mail" size={14} stroke={2} /></span><span>Email<small>{c.email ? 'Agreed to receive email' : 'No email address'}</small></span></span>
+        <span><span className="icon-chip pc-ic" aria-hidden><Icon name="mail" size={15} /></span><span>Email<small>{c.email ? 'Agreed to receive email' : 'No email address'}</small></span></span>
         <input type="checkbox" className="toggle" name="email_consent" defaultChecked={!!c.email_consent} onChange={() => ref.current?.requestSubmit()} />
       </label>
       <label className="pswitch">
-        <span><span className="pc-ic tn-green"><Icon name="chat" size={14} stroke={2} /></span><span>WhatsApp<small>{c.phone ? 'Agreed to receive WhatsApp' : 'No mobile number'}</small></span></span>
+        <span><span className="icon-chip ok pc-ic" aria-hidden><Icon name="chat" size={15} /></span><span>WhatsApp<small>{c.phone ? 'Agreed to receive WhatsApp' : 'No mobile number'}</small></span></span>
         <input type="checkbox" className="toggle" name="wa_consent" defaultChecked={!!c.wa_consent} onChange={() => ref.current?.requestSubmit()} />
       </label>
       <Busy />

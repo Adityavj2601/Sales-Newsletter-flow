@@ -1,6 +1,5 @@
 import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
-import { ago } from '@/lib/format';
 import { ContactsTable, type Row } from '@/components/people/ContactsTable';
 import { bulkContacts } from '../actions';
 import { ContactsActions } from './Importer';
@@ -28,12 +27,12 @@ export default async function Contacts({ searchParams }: { searchParams: Promise
   if (sp.status) rows = rows.filter((r) => r.status === sp.status);
   const shown: Row[] = rows.slice(0, CAP).map((r) => ({
     id: r.id, first_name: r.first_name || '', last_name: r.last_name || '', email: r.email, phone: r.phone, company: r.company || '', role: r.role || '', city: r.city || '',
-    tags: r.tags || '', email_consent: r.email_consent ? 1 : 0, wa_consent: r.wa_consent ? 1 : 0, status: r.status, stage: r.stage, score: Number(r.score || 0), last: ago(r.last_engaged_at),
+    tags: r.tags || '', email_consent: r.email_consent ? 1 : 0, wa_consent: r.wa_consent ? 1 : 0, status: r.status, stage: r.stage, score: Number(r.score || 0), last: r.last_engaged_at || null,
   }));
   return (
     <div className="contacts">
       <ContactsActions
-        eyebrow={`${p.name} audience`} title="Contacts"
+        eyebrow={p.newsletter_name || p.name} title="Contacts"
         sub={`${total} ${total === 1 ? 'contact' : 'contacts'}. Only people who agreed to hear from you get editions, and consent is stored per channel. Unsubscribes are honoured automatically.`}
         openImport={!!sp.import} openAdd={!!sp.add} empty={total === 0}
       />

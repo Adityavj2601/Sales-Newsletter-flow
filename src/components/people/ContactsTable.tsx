@@ -7,10 +7,12 @@ import { StagePill, Score } from '@/components/bits';
 import { Spinner } from '@/components/ui';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
+import { Rel } from './Rel';
+import { fmtPhone } from '@/lib/format';
 
 export type Row = {
   id: string; first_name: string; last_name: string; email: string | null; phone: string | null; company: string; role: string; city: string;
-  tags: string; email_consent: number; wa_consent: number; status: string; stage: string; score: number; last: string;
+  tags: string; email_consent: number; wa_consent: number; status: string; stage: string; score: number; last: string | null;
 };
 
 function BulkBar({ n, onClear }: { n: number; onClear: () => void }) {
@@ -86,16 +88,16 @@ export function ContactsTable({ rows, tags, q: q0, tag, consent, status, total, 
                 return (
                   <tr key={c.id} className={`${on ? 'is-sel' : ''} ${c.status !== 'active' ? 'is-off' : ''}`}>
                     <td className="ptd-sel"><input type="checkbox" className="pcb" name="ids" value={c.id} aria-label={`Select ${name}`} checked={on} onChange={() => toggle(c.id)} /></td>
-                    <td className="ptd-who"><Link href={`/app/contacts/${c.id}`} className="pwho"><Avatar name={name} size={36} /><span><b>{name}</b><span>{[c.role, c.city].filter(Boolean).join(' · ') || c.email || c.phone}</span></span></Link></td>
+                    <td className="ptd-who"><Link href={`/app/contacts/${c.id}`} className="pwho"><Avatar name={name} size={36} /><span><b>{name}</b><span>{[c.role, c.city].filter(Boolean).join(' · ') || c.email || fmtPhone(c.phone)}</span></span></Link></td>
                     <td className="ptd-co"><span className="pco">{c.company || <span className="hint">—</span>}</span>{tg.length > 0 && <span className="ptags">{tg.slice(0, 3).map((t) => <span key={t} className="ptag">{t}</span>)}{tg.length > 3 && <span className="ptag">+{tg.length - 3}</span>}</span>}</td>
                     <td className="ptd-reach">
                       {c.email && <span className={`preach ${c.email_consent ? 'on' : ''}`} title={c.email_consent ? 'Email consent' : 'No email consent'}><Icon name="mail" size={13} /><span className="clip">{c.email}</span><span className="sr">{c.email_consent ? 'Email consent' : 'No email consent'}</span></span>}
-                      {c.phone && <span className={`preach ${c.wa_consent ? 'on' : ''}`} title={c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}><Icon name="chat" size={13} /><span className="tnum">{c.phone}</span><span className="sr">{c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}</span></span>}
-                      {c.status !== 'active' && <span className="pill bad">{c.status}</span>}
+                      {c.phone && <span className={`preach ${c.wa_consent ? 'on' : ''}`} title={c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}><Icon name="chat" size={13} /><span className="tnum">{fmtPhone(c.phone)}</span><span className="sr">{c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}</span></span>}
+                      {c.status !== 'active' && <span className="pill bad">{c.status === 'unsubscribed' ? 'Unsubscribed' : c.status[0].toUpperCase() + c.status.slice(1)}</span>}
                     </td>
                     <td className="ptd-stage"><StagePill stage={c.stage} /></td>
                     <td className="num ptd-score"><Score n={c.score} /></td>
-                    <td className="hint ptd-last">{c.last}</td>
+                    <td className="hint ptd-last">{c.last ? <Rel iso={c.last} /> : '—'}</td>
                   </tr>
                 );
               })}</tbody>

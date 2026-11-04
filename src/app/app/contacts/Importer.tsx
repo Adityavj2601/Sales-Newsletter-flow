@@ -46,7 +46,7 @@ export function Importer({ onDone }: { onDone?: () => void }) {
       </label>
 
       <label className="f imp-paste"><span>…or paste rows</span>
-        <textarea className="in mono" rows={3} value={text} onChange={(e) => { setText(e.target.value); setFile(null); }} placeholder={'Name,Email,Mobile,Company,Designation,City\nRohan Mehta,rohan@skyline.in,9800000001,Skyline Developers,Head of Sales,Pune'} />
+        <textarea className="in" rows={3} value={text} onChange={(e) => { setText(e.target.value); setFile(null); }} placeholder={'Name,Email,Mobile,Company,Designation,City\nRohan Mehta,rohan@skyline.in,9800000001,Skyline Developers,Head of Sales,Pune'} />
       </label>
       <input type="hidden" name="csv" value={text} />
       <input type="hidden" name="map" value={JSON.stringify(effective)} />
@@ -65,7 +65,7 @@ export function Importer({ onDone }: { onDone?: () => void }) {
                 </label>
               ))}
             </div>
-            {!hasReach && <div className="notice warn">Match an Email or Mobile column. Rows without either are skipped.</div>}
+            {!hasReach && <div className="notice warn"><span className="ni" aria-hidden>!</span><div>Match an Email or Mobile column. Rows without either are skipped.</div></div>}
           </section>
 
           <section className="imp-sec">
@@ -97,7 +97,7 @@ export function Importer({ onDone }: { onDone?: () => void }) {
       )}
       {state && (
         <div className="imp-res" ref={resRef}>
-          <div className={`notice ${state.errors.length && !state.added ? 'bad' : 'ok'}`}>{state.added} added, {state.updated} updated, {state.skipped} skipped.{state.errors.length ? <><br />{state.errors.join(' · ')}</> : null}</div>
+          <div className={`notice ${state.errors.length && !state.added ? 'bad' : 'ok'}`} role="status"><span className="ni" aria-hidden>{state.errors.length && !state.added ? '!' : '✓'}</span><div>{state.added} added, {state.updated} updated, {state.skipped} skipped.{state.errors.length ? <><br />{state.errors.join(' · ')}</> : null}</div></div>
           {onDone && (state.added > 0 || state.updated > 0) && <div className="imp-res-btn"><button type="button" className="btn primary" onClick={onDone}>Done</button></div>}
         </div>
       )}
@@ -118,7 +118,7 @@ export function ContactsActions({ title, eyebrow, sub, openImport, openAdd, empt
   return (
     <>
       <div className="ph">
-        <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p className="sub">{sub}</p></div>
+        <div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p className="sub">{sub}</p></div>
         <div className="row">
           <a className="btn" href="/api/export?type=contacts">Export CSV</a>
           <button type="button" className="btn" onClick={() => open('import')}><Icon name="upload" size={15} />Import CSV</button>
