@@ -6,7 +6,7 @@ import { BLOCK_LABELS, CTA_LABELS, MATURITY, PILLARS, newBlock, ovKey, type Bloc
 import { Confirm } from '@/components/ui';
 import { I, BlockIcon, BLOCK_META } from '@/components/editor/icons';
 import { Segmented, Popover, PreviewFrame, ScaledPreview, Ring, useFlip, useMod, Kbd, reducedMotion } from '@/components/editor/kit';
-import { edNo, fmtDay, fmtTime, todayIn } from '@/lib/format';
+import { ago, edNo, fmtDay, fmtTime, relDay, todayIn } from '@/lib/format';
 import { FlowStepper } from '@/components/FlowStepper';
 import { flowState, type FlowStage } from '@/lib/flow';
 
@@ -21,6 +21,7 @@ const QUICK = ['Make it punchier and shorter', 'Rewrite “why it matters” for
 const VIEWS = [{ value: 'phone' as const, label: 'Phone' }, { value: 'web' as const, label: 'Desktop' }, { value: 'email' as const, label: 'Email' }, { value: 'wa' as const, label: 'WhatsApp' }];
 const WIDE = '(min-width: 1500px)';
 const STACK = '(max-width: 999px)';
+const PHONE = '(max-width: 640px)';
 const rid = () => Math.random().toString(36).slice(2, 9);
 /** "9:01 pm" today, otherwise "Wed, 4 Nov · 9:01 pm" — the app-wide time format. */
 const when = (iso: string) => (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIn() ? fmtTime(iso) : `${fmtDay(iso)} · ${fmtTime(iso)}`);
@@ -28,13 +29,6 @@ const when = (iso: string) => (new Date(iso).toLocaleDateString('en-CA', { timeZ
    device frames the caption under the device already says so, so the strip is hidden. */
 const CALM_STRIP = '<style>.pv{display:none!important}</style>';
 const calm = (html: string) => (html.includes('</head>') ? html.replace('</head>', `${CALM_STRIP}</head>`) : html);
-function rel(iso: string) {
-  const s = (Date.now() - +new Date(iso)) / 1000;
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-}
 
 function summary(b: Block): string {
   switch (b.type) {
@@ -143,6 +137,15 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
 
   /* ---------- responsive inspector: inline (wide), drawer (mid), stacked (narrow) ---------- */
   const [layout, setLayout] = useState<'wide' | 'mid' | 'stack'>('wide');
+  /* Phones: the preview grows to the page's height and scrolls with the page (no box-in-a-box scrolling). */
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia(PHONE);
+    const u = () => setPhone(m.matches);
+    u();
+    m.addEventListener('change', u);
+    return () => m.removeEventListener('change', u);
+  }, []);
   const [inspHidden, setInspHidden] = useState(false);
   const [drawer, setDrawer] = useState(false);
   /* Narrow screens show one pane at a time, switched from the bottom bar. Each pane keeps its own scroll position. */
@@ -154,15 +157,18 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     if (paneRef.current === next) return;
     paneScroll.current[paneRef.current] = window.scrollY;
     setPaneRaw(next);
-    // First visit to Preview/Copilot lands on the pane itself (just under the bar), not on the large title above it.
-    requestAnimationFrame(() => {
-      const saved = paneScroll.current[next];
-      const shell = document.querySelector<HTMLElement>('.ed-shell');
-      const bar = document.querySelector<HTMLElement>('.ed-top');
-      const paneTop = shell && bar && next !== 'content' ? Math.max(0, shell.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 12) : 0;
-      window.scrollTo({ top: saved ?? paneTop });
-    });
   }, []);
+  // After the new pane is in the DOM: first visit to Preview/Copilot lands on the pane itself (just under the bar),
+  // not on the large title above it; later visits return to where you left it.
+  const paneMounted = useRef(false);
+  useLayoutEffect(() => {
+    if (!paneMounted.current) { paneMounted.current = true; return; }
+    const saved = paneScroll.current[pane];
+    const shell = document.querySelector<HTMLElement>('.ed-shell');
+    const bar = document.querySelector<HTMLElement>('.ed-top');
+    const paneTop = shell && bar && pane !== 'content' ? Math.max(0, shell.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 12) : 0;
+    window.scrollTo({ top: saved ?? paneTop });
+  }, [pane]);
   useEffect(() => {
     const w = window.matchMedia(WIDE), s = window.matchMedia(STACK);
     const u = () => setLayout(w.matches ? 'wide' : s.matches ? 'stack' : 'mid');
@@ -595,6 +601,30 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     return () => { window.removeEventListener('scroll', on); window.removeEventListener('resize', on); };
   }, []);
 
+  /* 1000–1499px: the inspector floats over the preview. While it is open, the device slides (and if needed scales)
+     into the space left of it, so the preview stays whole; window views narrow instead and re-fit their page. */
+  const centerRef = useRef<HTMLDivElement>(null);
+  const overlay = layout === 'mid' && drawer;
+  useLayoutEffect(() => {
+    const el = centerRef.current;
+    if (!el || !overlay) return;
+    const fit = () => {
+      const aside = el.parentElement?.querySelector<HTMLElement>('.ed-right');
+      if (!aside) return;
+      const r = el.getBoundingClientRect();
+      const edge = window.innerWidth - (parseFloat(getComputedStyle(aside).right) || 0) - aside.offsetWidth - 20;
+      const pad = Math.max(0, Math.round(r.right - edge));
+      const dev = el.querySelector<HTMLElement>('.pv-stage > .phone-frame');
+      const s = dev ? Math.min(1, (r.width - pad - 24) / dev.offsetWidth) : 1;
+      el.style.setProperty('--pv-pad', `${pad}px`);
+      el.style.setProperty('--pv-dx', `${-pad / 2}px`);
+      el.style.setProperty('--pv-s', String(Math.max(0.5, Math.round(s * 1000) / 1000)));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [overlay, view]);
+
   const [keysOpen, setKeysOpen] = useState(false);
   const keysRef = useRef<HTMLButtonElement>(null);
   const closeKeys = useCallback(() => setKeysOpen(false), []);
@@ -645,7 +675,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
 
       {/* ---------- Large title (narrow screens): title, status and where it is in the weekly flow ---------- */}
       <header className="ed-head">
-        <div className="eyebrow">Edition {edition.number}{planned ? ` · Planned for ${fmtDay(planned)}` : ''}</div>
+        <div className="eyebrow"><span className="tnum">{edNo(edition.number)}</span>{planned ? <><span className="sep" aria-hidden>·</span><span title={relDay(planned)}>Planned for {fmtDay(planned)}</span></> : null}</div>
         <h1 ref={headRef}>{c.title || 'Untitled edition'}</h1>
         <div className="ed-head-m"><StatusSwap status={status} /><span className="ed-head-next">{phase === 'sent' ? 'Sent · read-only' : status === 'scheduled' ? flow.detail : `Next: ${flow.title}`}</span></div>
         <FlowStepper current={stage} />
@@ -657,7 +687,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
           <form action={duplicateAction}><button type="submit" className="btn sm">Duplicate</button></form>
         </div>
       )}
-      <div className={`ed-shell ed-v2 ${inspHidden ? 'no-insp' : ''}`} data-pane={pane}>
+      <div className={`ed-shell ed-v2 ${inspHidden ? 'no-insp' : ''} ${overlay ? 'insp-over' : ''}`} data-pane={pane}>
         {/* ---------- LEFT: content ---------- */}
         <div className="ed-col ed-left">
           <div className="pane-h">
@@ -767,19 +797,19 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
         </div>
 
         {/* ---------- CENTER: preview ---------- */}
-        <div className="ed-col ed-center">
+        <div className="ed-col ed-center" ref={centerRef}>
           <div className="pv-head">
             <Segmented label="Preview" value={view} onChange={setView} options={VIEWS} />
             <span className={`pv-live ${updating ? 'busy' : ''}`} aria-live="polite">{updating ? <><span className="spin" />Updating</> : <><span className="live-dot" />Live</>}</span>
           </div>
-          <div className="pv-stage" key={view}>
+          <div className={`pv-stage ${phone ? 'fit' : ''}`} key={view}>
             {view === 'phone' && (
-              <div className="phone-frame"><StatusBar /><PreviewFrame html={htmlFor('web')} title="Phone preview" /></div>
+              <div className="phone-frame"><StatusBar /><PreviewFrame html={htmlFor('web')} title="Phone preview" fit={phone} /></div>
             )}
             {view === 'web' && (
               <div className="win browser">
                 <div className="win-bar"><span className="lights" aria-hidden><i /><i /><i /></span><span className="url"><I.shield size={12} />{publicUrl.replace(/^https?:\/\//, '')}</span><span className="lights-sp" /></div>
-                <ScaledPreview html={htmlFor('web')} title="Desktop preview" width={1180} />
+                <ScaledPreview html={htmlFor('web')} title="Desktop preview" width={1180} fit={phone} />
               </div>
             )}
             {view === 'email' && (
@@ -789,7 +819,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                   <span className="av" aria-hidden>{product.name.slice(0, 1)}</span>
                   <div className="mail-m"><div className="mail-from"><b>{product.newsletter}</b><span>to Rohan</span></div><div className="mail-subj">{subjectFor || 'No subject'}</div><div className="mail-pre">{c.preheader}</div></div>
                 </div>
-                <ScaledPreview html={htmlFor('email')} title="Email preview" width={680} />
+                <ScaledPreview html={htmlFor('email')} title="Email preview" width={680} fit={phone} />
               </div>
             )}
             {view === 'wa' && (
@@ -907,7 +937,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                         {versions.map((v, i) => (
                           <li key={v.id} style={{ animationDelay: `${i * 30}ms` }}>
                             <span className="vh-dot" aria-hidden />
-                            <div className="vh-m"><div className="vh-n">{v.note || 'Saved'}</div><div className="hint" title={when(v.created_at)}>{v.author} · {rel(v.created_at)}</div></div>
+                            <div className="vh-m"><div className="vh-n">{v.note || 'Saved'}</div><div className="hint" title={when(v.created_at)}>{v.author} · {ago(v.created_at)}</div></div>
                             {!locked && <button type="button" className="btn sm" onClick={() => restore(v.id)}>Restore</button>}
                           </li>
                         ))}

@@ -4,7 +4,7 @@ import { requireProduct } from '@/lib/context';
 import { listEditions, pickKb, pickStories } from '@/lib/editions';
 import { baseUrl, getSetting } from '@/lib/settings';
 import { configuredProviders } from '@/lib/ai/providers';
-import { fmtDay, ago, nextSendDate, todayIn, edNo } from '@/lib/format';
+import { fmtDay, ago, relDay, nextSendDate, todayIn, edNo } from '@/lib/format';
 import { editionMetrics } from '@/lib/metrics';
 import { StatusPill } from '@/components/bits';
 import { ovKey } from '@/lib/types';
@@ -44,13 +44,14 @@ export default async function Editions({ searchParams }: { searchParams: Promise
   };
   const preview = (e: (typeof eds)[number]) => `${base}/e/${p.slug}/${e.slug}${e.status === 'sent' ? '' : '?preview=1'}`;
   const cover = (e: (typeof eds)[number]) => `/og/${e.id}.png?v=${encodeURIComponent(e.updated_at)}`;
-  const rel = (iso: string | null | undefined) => (iso ? ago(iso.length === 10 ? `${iso}T04:30:00Z` : iso) : '');
+  // Planned send DAYS read "tomorrow" / "in 8 days"; exact instants (scheduled, sent) read "in 3 h" / "2 d ago".
+  const rel = (iso: string | null | undefined) => (!iso ? '' : iso.length === 10 ? relDay(iso) : ago(iso));
 
   return (
     <div className="eds">
       <div className="ph">
         <div>
-          <div className="eyebrow">{p.name} · {p.newsletter_name}</div>
+          <div className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</div>
           <h1>Editions</h1>
           <p className="sub">{upcoming.length} upcoming · {done.length} sent. Editing an approved edition sends it back to review.</p>
         </div>
