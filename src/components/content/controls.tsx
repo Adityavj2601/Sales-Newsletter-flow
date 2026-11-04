@@ -176,16 +176,17 @@ export function AutoToggle({ name, defaultChecked, label }: { name?: string; def
 }
 
 /* ---------- Live countdown ---------- */
+/** Same words as ago() in lib/format ("in 14 min", "in 7 h", "in 2 d"), ticking live. */
 function until(ms: number) {
-  if (ms <= 0) return 'due now';
-  const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  if (d >= 1) return `in ${d}d ${h}h`;
-  if (h >= 1) return `in ${h}h ${String(m).padStart(2, '0')}m`;
-  return `in ${m}:${String(sec).padStart(2, '0')}`;
+  if (ms <= 30_000) return 'due now';
+  const f = ms / 1000;
+  if (f < 3600) return `in ${Math.max(1, Math.round(f / 60))} min`;
+  if (f < 86400) return `in ${Math.round(f / 3600)} h`;
+  return `in ${Math.round(f / 86400)} d`;
 }
 export function Countdown({ iso }: { iso: string }) {
   const [, tick] = useState(0);
-  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 15_000); return () => clearInterval(t); }, []);
   return <span className="cx-count" suppressHydrationWarning>{until(+new Date(iso) - Date.now())}</span>;
 }
 

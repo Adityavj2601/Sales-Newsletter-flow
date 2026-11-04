@@ -93,3 +93,13 @@ export function fmtTime(iso: string | null | undefined, tz = TZ_DEFAULT) {
   if (!iso) return '–';
   return new Date(iso).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s?(am|pm)$/i, (x) => ` ${x.trim().toLowerCase()}`);
 }
+
+/**
+ * Relative words for a planned DAY (send dates): "today", "tomorrow", "in 3 days", "yesterday", "4 days ago".
+ * Use this for edition dates everywhere; use ago() for exact instants (job runs, events).
+ */
+export function relDay(day: string | null | undefined, tz = TZ_DEFAULT): string {
+  if (!day) return '';
+  const diff = Math.round((+new Date(day.slice(0, 10) + 'T12:00:00Z') - +new Date(todayIn(tz) + 'T12:00:00Z')) / 86400_000);
+  return diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : diff > 1 ? `in ${diff} days` : diff === -1 ? 'yesterday' : `${-diff} days ago`;
+}

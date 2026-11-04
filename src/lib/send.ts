@@ -1,6 +1,6 @@
 import { imgKey } from './crypto';
 import { all, get, insert, update, uid, now, token, run, parse } from './db';
-import { getEdition, type Edition } from './editions';
+import { getEdition, claimSendNumber, type Edition } from './editions';
 import { getProduct, getSetting, baseUrl, waReady, waToken, type Product } from './settings';
 import { renderEmail, renderEmailText, renderWhatsApp } from './render/email';
 import { sendMail } from './mailer';
@@ -46,10 +46,12 @@ function newDelivery(editionId: string, contactId: string | null, channel: strin
 
 /** Queue email (and WhatsApp API) deliveries; the every-minute worker sends them at the configured pace. */
 export function queueEdition(editionId: string, cfg: SendConfig) {
-  const e = getEdition(editionId);
-  if (!e) throw new Error('Edition not found');
-  const why = canSend(e);
+  const e0 = getEdition(editionId);
+  if (!e0) throw new Error('Edition not found');
+  const why = canSend(e0);
   if (why) throw new Error(why);
+  if (cfg.channels.some((ch) => audienceFor(e0, ch, cfg.audience).length)) claimSendNumber(editionId);
+  const e = getEdition(editionId)!;
   let queued = 0;
   for (const ch of cfg.channels) {
     if (ch === 'whatsapp' && !waReady()) continue;
@@ -158,10 +160,12 @@ export function personalLink(e: Edition, p: Product, tok: string) {
 
 /** Manual click-to-chat: one delivery per contact, message pre-filled; you press send in WhatsApp. */
 export function manualWhatsApp(editionId: string, contactId: string) {
+  const e0 = getEdition(editionId)!;
+  const why = canSend(e0);
+  if (why) throw new Error(why);
+  claimSendNumber(editionId);
   const e = getEdition(editionId)!;
   const p = getProduct(e.product_id)!;
-  const why = canSend(e);
-  if (why) throw new Error(why);
   const c = get('SELECT * FROM contacts WHERE id = ? AND product_id = ?', contactId, e.product_id);
   if (!c) throw new Error('Contact not found for this product.');
   if (!c.phone) throw new Error('This contact has no phone number.');
@@ -246,6 +250,7 @@ export async function processQueue(log: (s: string) => void) {
 
 /** Mark an edition as sent without the email queue (e.g. WhatsApp-only, copied link). */
 export function markSent(editionId: string) {
+  if (get("SELECT 1 FROM editions WHERE id = ? AND status IN ('approved','scheduled')", editionId)) claimSendNumber(editionId);
   const r = run("UPDATE editions SET status = 'sent', sent_at = ? WHERE id = ? AND status IN ('approved','scheduled')", now(), editionId);
   if (!r.changes) throw new Error('Only an approved or scheduled edition can be marked as sent.');
   markFeatured(editionId);

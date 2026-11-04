@@ -4,7 +4,7 @@ import { normalizeContent, emptyContent, type EditionContent, type ChecksRun, PI
 import { runJSON } from './ai/providers';
 import { draftSystem, editSystem, subjectSystem } from './ai/prompts';
 import { demoDraft, demoPlaceholderShowcase } from './ai/demo';
-import { nextSendDate } from './format';
+import { nextSendDate, todayIn } from './format';
 
 export type EditionStatus = 'draft' | 'review' | 'approved' | 'scheduled' | 'sending' | 'sent';
 export type EditionRow = {
@@ -196,3 +196,33 @@ export function blankEdition(productId: string, author: string, plannedFor?: str
 }
 
 export const pillarLabel = (k: string) => (PILLARS as any)[k]?.label || k;
+
+/**
+ * Edition numbers follow send order. The first time an edition goes out (queued, a WhatsApp link opened, or marked
+ * sent), its planned date becomes today if it was later, and it takes the lowest number among editions that haven't gone out yet, and those later drafts move up by one.
+ * Nothing that has already gone out is ever renumbered. Unpublished slugs follow their new number.
+ */
+export function claimSendNumber(editionId: string) {
+  const published = (id: string) => !!get("SELECT 1 FROM editions WHERE id = ? AND status IN ('sending','sent')", id) || !!get('SELECT 1 FROM deliveries WHERE edition_id = ? AND contact_id IS NOT NULL LIMIT 1', id);
+  const e = get('SELECT id, product_id, number FROM editions WHERE id = ?', editionId);
+  if (!e || published(e.id)) return;
+  // Planned for a later day but going out now: the date readers see is today.
+  const today = todayIn(getSetting('general').timezone);
+  run('UPDATE editions SET planned_for = ? WHERE id = ? AND (planned_for IS NULL OR planned_for > ?)', today, e.id, today);
+  const waiting = all<{ id: string; number: number; slug: string; content: string }>('SELECT id, number, slug, content FROM editions WHERE product_id = ? AND number <= ? ORDER BY number', e.product_id, e.number).filter((x) => !published(x.id));
+  const lowest = waiting[0]?.number;
+  if (lowest == null || lowest >= e.number) return;
+  const reslug = (id: string, n: number, slug: string, content: string) => {
+    if (!/^\d{2,}-/.test(slug)) return;
+    run('UPDATE editions SET slug = ? WHERE id = ?', `tmp-${id}`, id);
+    run('UPDATE editions SET slug = ? WHERE id = ?', uniqueSlug(e.product_id, n, normalizeContent(parse(content, {})).title), id);
+  };
+  for (const x of waiting.slice().reverse()) {
+    if (x.id === e.id) continue;
+    run('UPDATE editions SET number = number + 1 WHERE id = ?', x.id);
+    reslug(x.id, x.number + 1, x.slug, x.content);
+  }
+  const self = waiting.find((x) => x.id === e.id)!;
+  run('UPDATE editions SET number = ? WHERE id = ?', lowest, e.id);
+  reslug(e.id, lowest, self.slug, self.content);
+}
