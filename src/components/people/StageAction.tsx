@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react';
 import { Icon } from './Icon';
 
 /** One-tap stage change with optimistic feedback: the button turns into a ✓ immediately; the save follows a beat later so the confirmation is seen before the row moves views. */
-export function StageAction({ action, label, done, className = 'btn sm' }: { action: () => Promise<void>; label: string; done: string; className?: string }) {
+export function StageAction({ action, label, done, className = 'btn sm' }: { action: () => Promise<void>; label: React.ReactNode; done: string; className?: string }) {
   const [ok, setOk] = useState(false);
   const [, start] = useTransition();
   return (
@@ -15,7 +15,11 @@ export function StageAction({ action, label, done, className = 'btn sm' }: { act
   );
 }
 
-/** Stage picker for a contact: the shared segmented control; the chosen stage moves immediately and saves behind it. */
+/**
+ * Stage picker for a contact. Wide screens: the shared segmented control. Phones: seven stages never fit a
+ * segmented control, so it becomes a pop-up menu (native select) that always shows the full current stage.
+ * The chosen stage moves immediately and saves behind it.
+ */
 export function StagePicker({ stages, current, actions }: { stages: [string, string][]; current: string; actions: Record<string, () => Promise<void>> }) {
   const [sel, setSel] = useState(current);
   const [pending, start] = useTransition();
@@ -26,10 +30,15 @@ export function StagePicker({ stages, current, actions }: { stages: [string, str
     start(async () => { try { await actions[k](); } catch { setSel(prev); } });
   };
   return (
-    <div className="seg pstage" role="group" aria-label="Stage" aria-busy={pending}>
-      {stages.map(([k, v]) => (
-        <button key={k} type="button" aria-pressed={sel === k} className={`s-${k}`} onClick={() => pick(k)}>{v}</button>
-      ))}
-    </div>
+    <>
+      <div className="seg pstage" role="group" aria-label="Stage" data-busy={pending || undefined}>
+        {stages.map(([k, v]) => (
+          <button key={k} type="button" aria-pressed={sel === k} className={`s-${k}`} onClick={() => pick(k)}>{v}</button>
+        ))}
+      </div>
+      <select className={`in pstage-menu s-${sel}`} aria-label="Stage" value={sel} onChange={(e) => pick(e.target.value)} data-busy={pending || undefined}>
+        {stages.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+    </>
   );
 }

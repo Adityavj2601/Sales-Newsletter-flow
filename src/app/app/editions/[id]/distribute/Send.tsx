@@ -1,6 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui';
 import { BodySheet as Sheet } from '@/components/people/BodySheet';
@@ -8,6 +7,7 @@ import { Icon } from '@/components/people/Icon';
 import { Avatar } from '@/components/people/Avatar';
 import { Ticker } from '@/components/people/Ticker';
 import { Rel } from '@/components/people/Rel';
+import { tagLabel } from '@/components/bits';
 
 async function post(url: string, body: any) {
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -29,9 +29,77 @@ const Notice = ({ k, children }: { k: string; children: React.ReactNode }) => (
   <div className={`notice ${k}`} role="status"><span className="ni" aria-hidden>{k === 'ok' ? '✓' : '!'}</span><div>{children}</div></div>
 );
 
+
+/** Keep the selected segment visible inside a horizontally scrolling segmented control (phones). */
+function useSelectedInView(ref: React.RefObject<HTMLElement | null>, dep: unknown) {
+  useEffect(() => {
+    const el = ref.current;
+    const on = el?.querySelector<HTMLElement>('[aria-selected="true"], [aria-pressed="true"]');
+    if (!el || !on || el.scrollWidth <= el.clientWidth) return;
+    el.scrollTo({ left: Math.max(0, on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2), behavior: 'smooth' });
+  }, [ref, dep]);
+}
+
+type Ch = { key: string; label: string; short?: string; icon: string; badge?: string; hint?: string };
+const ALIAS: Record<string, string> = { wa: 'whatsapp', 'wa-api': 'api' };
+/** One channel at a time: a segmented picker and the chosen panel. The choice lives in the URL hash (#email, #whatsapp, #link, #api). */
+export function Channels({ items, children }: { items: Ch[]; children: React.ReactNode }) {
+  const panels = Children.toArray(children);
+  const [on, setOn] = useState(items[0].key);
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const read = () => { const h = window.location.hash.slice(1); const k = ALIAS[h] || h; if (items.some((i) => i.key === k)) setOn(k); };
+    read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+  }, [items]);
+  useSelectedInView(ref, on);
+  const pick = (k: string, focus = false) => {
+    setOn(k);
+    try { window.history.replaceState(null, '', `#${k}`); } catch {}
+    if (focus) ref.current?.querySelector<HTMLElement>(`#tab-${k}`)?.focus();
+  };
+  const key = (e: React.KeyboardEvent) => {
+    const i = items.findIndex((x) => x.key === on);
+    const n = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : null;
+    if (n === null) return;
+    e.preventDefault();
+    pick(items[(n + items.length) % items.length].key, true);
+  };
+  return (
+    <div className="snd-chs">
+      <div className="seg snd-chseg" role="tablist" aria-label="Channel" ref={ref} onKeyDown={key}>
+        {items.map((c) => (
+          <button key={c.key} id={`tab-${c.key}`} type="button" role="tab" aria-selected={on === c.key} aria-controls={`panel-${c.key}`} tabIndex={on === c.key ? 0 : -1} onClick={() => pick(c.key)}>
+            <Icon name={c.icon} size={15} />{c.short ? <><span className="ch-l">{c.label}</span><span className="ch-s" aria-hidden>{c.short}</span></> : <span>{c.label}</span>}
+            {c.badge != null && <span className="seg-n" title={c.hint ? `${c.badge} ${c.hint}` : undefined}>{c.badge}</span>}
+          </button>
+        ))}
+      </div>
+      {items.map((c, i) => (
+        <section key={c.key} id={`panel-${c.key}`} role="tabpanel" aria-labelledby={`tab-${c.key}`} hidden={on !== c.key} className="card snd-panel">
+          {panels[i]}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** Delivery log: the newest few rows, the rest one tap away (same table, so columns stay aligned). */
+export function LogTable({ head, rows, shown }: { head: React.ReactNode; rows: React.ReactNode[]; shown: number }) {
+  const [all, setAll] = useState(false);
+  const list = all ? rows : rows.slice(0, shown);
+  return (
+    <>
+      <div className="snd-log"><table className="tbl">{head}<tbody>{list}</tbody></table></div>
+      {rows.length > shown && <button type="button" className="btn sm ghost snd-log-more" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${rows.length}`}</button>}
+    </>
+  );
+}
+
 type P = { tags: string[]; city: string };
-export function EmailSend({ editionId, status, blocked, editorHref, tags, cities, waApi, defaultAt, tz, pace, emailPeople, waPeople, failed, smtp = false, scheduledLabel = '', scheduledAt = '' }: { editionId: string; status: string; blocked: string; editorHref: string; fixLabel: string; total: number; tags: string[]; cities: string[]; waApi: boolean; defaultAt: string; tz: string; pace: number; emailPeople: P[]; waPeople: P[]; failed: number; smtp?: boolean; scheduledLabel?: string; scheduledAt?: string }) {
-  const [sel, setSel] = useState<string[]>([]);
+export function EmailSend({ editionId, status, blocked, tags, cities, waApi, defaultAt, tz, pace, emailPeople, waPeople, failed, smtp = false, scheduledLabel = '', scheduledAt = '' }: { editionId: string; status: string; blocked: string; tags: string[]; cities: string[]; waApi: boolean; defaultAt: string; tz: string; pace: number; emailPeople: P[]; waPeople: P[]; failed: number; smtp?: boolean; scheduledLabel?: string; scheduledAt?: string }) {
+  const [tag, setTag] = useState('');
   const [city, setCity] = useState('');
   const [wa, setWa] = useState(false);
   const [to, setTo] = useState('');
@@ -44,6 +112,7 @@ export function EmailSend({ editionId, status, blocked, editorHref, tags, cities
   const [sheetErr, setSheetErr] = useState<string | null>(null);
   const [doneMsg, setDoneMsg] = useState('');
   const router = useRouter();
+  const sel = tag ? [tag] : [];
   const audience = { tags: sel, city: city || undefined };
   const channels = wa ? ['email', 'whatsapp'] : ['email'];
 
@@ -69,18 +138,18 @@ export function EmailSend({ editionId, status, blocked, editorHref, tags, cities
     setBusy(null);
   }
 
-  const match = (p: P) => (!sel.length || sel.some((t) => p.tags.includes(t.toLowerCase()))) && (!city || p.city === city.toLowerCase());
-  const nEmail = useMemo(() => emailPeople.filter(match).length, [emailPeople, sel, city]); // eslint-disable-line react-hooks/exhaustive-deps
-  const nWa = useMemo(() => (wa ? waPeople.filter(match).length : 0), [waPeople, sel, city, wa]); // eslint-disable-line react-hooks/exhaustive-deps
+  const match = (p: P) => (!tag || p.tags.includes(tag.toLowerCase())) && (!city || p.city === city.toLowerCase());
+  const nEmail = useMemo(() => emailPeople.filter(match).length, [emailPeople, tag, city]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nWa = useMemo(() => (wa ? waPeople.filter(match).length : 0), [waPeople, tag, city, wa]); // eslint-disable-line react-hooks/exhaustive-deps
   const count = nEmail + nWa;
   const countLabel = `${plural(nEmail, 'email')}${wa ? ` + ${nWa} WhatsApp` : ''}`;
   const sent = status === 'sent' || status === 'sending';
   const scheduled = status === 'scheduled';
   const locked = !!blocked && !sent;
-  const filtered = sel.length > 0 || !!city;
+  const filtered = !!tag || !!city;
   const minutes = Math.max(1, Math.ceil(nEmail / Math.max(1, pace)));
-  const who = `Everyone with email consent${sel.length ? `, tagged ${sel.join(' or ')}` : ''}${city ? `, in ${city}` : ''}`;
-  const disabledReason = count === 0 ? (sent ? 'Everyone has it already' : 'No one matches') : '';
+  const who = `Everyone with email consent${tag ? `, tagged ${tagLabel(tag)}` : ''}${city ? `, in ${city}` : ''}`;
+  const disabledReason = count === 0 ? (sent ? 'Everyone has it already' : filtered ? 'No one matches these filters' : 'No one has agreed to email yet') : '';
 
   return (
     <div className="es">
@@ -95,20 +164,16 @@ export function EmailSend({ editionId, status, blocked, editorHref, tags, cities
           {(tags.length > 0 || cities.length > 0) && (
             <div className="es-filters">
               {tags.length > 0 && (
-                <div className="seg es-tags" role="group" aria-label="Filter by tag">
-                  <button type="button" aria-pressed={!sel.length} onClick={() => setSel([])}>Everyone</button>
-                  {tags.map((t) => {
-                    const on = sel.includes(t);
-                    return <button key={t} type="button" aria-pressed={on} onClick={() => setSel(on ? sel.filter((x) => x !== t) : [...sel, t])}>{t}</button>;
-                  })}
-                </div>
+                <select className={`in es-fil${tag ? ' is-on' : ''}`} aria-label="Tag" value={tag} onChange={(e) => setTag(e.target.value)}>
+                  <option value="">All tags</option>{tags.map((t) => <option key={t} value={t}>{tagLabel(t)}</option>)}
+                </select>
               )}
               {cities.length > 0 && (
-                <select className="in es-city" aria-label="City" value={city} onChange={(e) => setCity(e.target.value)}>
+                <select className={`in es-fil${city ? ' is-on' : ''}`} aria-label="City" value={city} onChange={(e) => setCity(e.target.value)}>
                   <option value="">All cities</option>{cities.map((c) => <option key={c}>{c}</option>)}
                 </select>
               )}
-              {filtered && <button type="button" className="btn sm ghost" onClick={() => { setSel([]); setCity(''); }}>Reset</button>}
+              {filtered && <button type="button" className="btn sm ghost" onClick={() => { setTag(''); setCity(''); }}>Reset</button>}
             </div>
           )}
           {waApi && !locked && (
@@ -124,9 +189,8 @@ export function EmailSend({ editionId, status, blocked, editorHref, tags, cities
           {locked ? (
             <div className="es-locked">
               <span className="icon-chip warn" aria-hidden><Icon name="lock" size={17} /></span>
-              <b>Locked until it’s approved</b>
-              <p>{blocked} Emails can’t go out before then, but you can send yourself a test below.</p>
-              <Link className="btn" href={editorHref}><Icon name="pencil" size={15} />Open editor</Link>
+              <b>Unlocks once it’s approved</b>
+              <p>Nothing can go out before then. Send yourself a test below to see exactly what people will get.</p>
             </div>
           ) : (
             <>
@@ -175,7 +239,7 @@ export function EmailSend({ editionId, status, blocked, editorHref, tags, cities
         </form>
       </div>
       {msg && msg.where === 'test' && <Notice k={msg.k}>{msg.t}</Notice>}
-      {status === 'approved' && !locked && <p className="es-desc">Only sending by WhatsApp or link? <button className="btn sm ghost" disabled={!!busy} onClick={() => go({ mode: 'markSent' })}>Mark this edition as sent</button></p>}
+      {status === 'approved' && !locked && <p className="es-desc es-mark">Only sending by WhatsApp or link? <button className="btn sm ghost" disabled={!!busy} onClick={() => go({ mode: 'markSent' })}>Mark this edition as sent</button></p>}
 
       <Sheet open={!!sheet} onClose={() => { if (busy !== 'now') setSheet(null); }} width={440}>
         {sheet === 'done' ? (
@@ -247,7 +311,7 @@ export function WaList({ editionId, contacts, blocked }: { editionId: string; co
           <label className="psearch"><Icon name="search" size={15} /><input type="search" aria-label="Search WhatsApp list" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         </div>
       </div>
-      {blocked && <Notice k="warn">{blocked} The WhatsApp buttons unlock after that.</Notice>}
+      {blocked && <Notice k="warn">The WhatsApp buttons unlock once the edition is approved and its checks pass.</Notice>}
       {err && <Notice k="bad">{err}</Notice>}
       <ul className="wl-list">
         {list.map((c) => {
@@ -256,7 +320,7 @@ export function WaList({ editionId, contacts, blocked }: { editionId: string; co
             <li key={c.id} className={`${isSent ? 'is-sent' : ''} ${fresh === c.id ? 'is-fresh' : ''}`}>
               <span className="wl-check" aria-hidden><Icon name="check" size={12} stroke={3} /></span>
               <Avatar name={c.name || c.phone} size={36} />
-              <div className="wl-who"><b>{c.name || c.phone}</b><span>{c.company ? <>{c.company} · </> : null}<span className="tnum">{c.phone}</span></span></div>
+              <div className="wl-who"><b>{c.name || c.phone}</b><span>{c.company ? <span className="wl-co">{c.company}</span> : null}<span className="wl-ph tnum">{c.phone}</span></span></div>
               <div className="wl-act">
                 {isSent && <span className="wl-sent"><Icon name="check" size={12} stroke={2.8} />Sent</span>}
                 <button className={`btn sm ${isSent ? 'ghost' : 'wa'}`} disabled={!!blocked || busy === c.id} onClick={() => open(c)} aria-label={`${isSent ? 'Open WhatsApp again for' : 'Open WhatsApp for'} ${c.name || c.phone}`}>

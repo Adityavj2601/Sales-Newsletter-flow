@@ -1,4 +1,4 @@
-/** Leads skeleton: header, pipeline strip, view tabs and the table, matching the real page. */
+/** Leads skeleton: header, stage filter and the table, matching the real page. */
 export default function Loading() {
   return (
     <div className="sk-page leads" aria-busy="true" aria-label="Loading leads">
@@ -13,8 +13,7 @@ export default function Loading() {
           <div className="skeleton" style={{ width: 104, height: 34 }} />
         </div>
       </div>
-      <div className="skeleton" style={{ height: 82, borderRadius: 18 }} />
-      <div className="skeleton" style={{ width: 'min(560px, 100%)', height: 36, borderRadius: 11 }} />
+      <div className="skeleton sk-lp" style={{ borderRadius: 14 }} />
       <div className="sk-tbl">
         {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className="sk-tr">

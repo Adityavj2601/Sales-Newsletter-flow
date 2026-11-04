@@ -20,5 +20,8 @@ export function Score({ n }: { n: number }) {
   return <span className={`pill ${cls}`} title="Lead score">{n}</span>;
 }
 
+/** Tags are stored as typed (often lower-case, hyphenated); show them in Title Case everywhere. */
+export const tagLabel = (t: string) => t.split(/[-_\s]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+
 /** The one avatar: same component, hue and initials as components/people/Avatar. */
 export { Avatar, initials, hueOf } from './people/Avatar';

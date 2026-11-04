@@ -3,7 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Form from 'next/form';
 import { useFormStatus } from 'react-dom';
-import { StagePill, Score } from '@/components/bits';
+import { StagePill, Score, tagLabel } from '@/components/bits';
 import { Spinner } from '@/components/ui';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -38,7 +38,7 @@ function BulkBar({ n, onClear }: { n: number; onClear: () => void }) {
   );
 }
 
-export function ContactsTable({ rows, tags, q: q0, tag, consent, status, total, action, capped }: { rows: Row[]; tags: string[]; q: string; tag: string; consent: string; status: string; total: number; action: (fd: FormData) => Promise<void>; capped: boolean }) {
+export function ContactsTable({ rows, tags, q: q0, tag, consent, status, total, of = total, action, capped }: { rows: Row[]; tags: string[]; q: string; tag: string; consent: string; status: string; total: number; of?: number; action: (fd: FormData) => Promise<void>; capped: boolean }) {
   const [q, setQ] = useState(q0);
   const dq = useDeferredValue(q);
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -62,15 +62,16 @@ export function ContactsTable({ rows, tags, q: q0, tag, consent, status, total, 
     <>
       <Form action="/app/contacts" ref={filterRef} className="ctool" role="search">
         <label className="psearch psearch-lg"><Icon name="search" size={16} />
-          <input name="q" aria-label="Search contacts" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, city, phone…" autoComplete="off" />
+          <input name="q" aria-label="Search contacts" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search contacts" autoComplete="off" />
           {q && <button type="button" className="psearch-x" aria-label="Clear search" onClick={() => setQ('')}><Icon name="x" size={11} stroke={2.6} /></button>}
         </label>
-        <select className="in cfil" name="tag" aria-label="Tag" defaultValue={tag} onChange={autoSubmit} data-on={!!tag}><option value="">All tags</option>{tags.map((t) => <option key={t}>{t}</option>)}</select>
+        <select className="in cfil" name="tag" aria-label="Tag" defaultValue={tag} onChange={autoSubmit} data-on={!!tag}><option value="">All tags</option>{tags.map((t) => <option key={t} value={t}>{tagLabel(t)}</option>)}</select>
         <select className="in cfil" name="consent" aria-label="Consent" defaultValue={consent} onChange={autoSubmit} data-on={!!consent}><option value="">Any consent</option><option value="email">Email consent</option><option value="wa">WhatsApp consent</option><option value="none">No consent</option></select>
         <select className="in cfil" name="status" aria-label="Status" defaultValue={status} onChange={autoSubmit} data-on={!!status}><option value="">Any status</option><option value="active">Active</option><option value="unsubscribed">Unsubscribed</option></select>
         <noscript><button className="btn">Filter</button></noscript>
         {filtered && <Link className="btn ghost sm" href="/app/contacts" onClick={() => setQ('')}>Clear</Link>}
-        <span className="ccount" aria-live="polite">{list.length === total ? `${total} ${total === 1 ? 'contact' : 'contacts'}` : `${list.length} of ${total}`}{capped ? ' (first 500)' : ''}</span>
+        <span className="ccount" aria-live="polite">{list.length !== of ? `${list.length} of ${of}` : ''}{capped ? ' (first 500)' : ''}</span>
+        <a className="btn sm cexport" href="/api/export?type=contacts">Export CSV</a>
       </Form>
 
       <form action={action} className="cform">
@@ -89,7 +90,7 @@ export function ContactsTable({ rows, tags, q: q0, tag, consent, status, total, 
                   <tr key={c.id} className={`${on ? 'is-sel' : ''} ${c.status !== 'active' ? 'is-off' : ''}`}>
                     <td className="ptd-sel"><input type="checkbox" className="pcb" name="ids" value={c.id} aria-label={`Select ${name}`} checked={on} onChange={() => toggle(c.id)} /></td>
                     <td className="ptd-who"><Link href={`/app/contacts/${c.id}`} className="pwho"><Avatar name={name} size={36} /><span><b>{name}</b><span>{[c.role, c.city].filter(Boolean).join(' · ') || c.email || fmtPhone(c.phone)}</span></span></Link></td>
-                    <td className="ptd-co"><span className="pco">{c.company || <span className="hint">—</span>}</span>{tg.length > 0 && <span className="ptags">{tg.slice(0, 3).map((t) => <span key={t} className="ptag">{t}</span>)}{tg.length > 3 && <span className="ptag">+{tg.length - 3}</span>}</span>}</td>
+                    <td className="ptd-co"><span className="pco">{c.company || <span className="hint">—</span>}</span>{tg.length > 0 && <span className="ptags">{tg.slice(0, 3).map((t) => <span key={t} className="ptag">{tagLabel(t)}</span>)}{tg.length > 3 && <span className="ptag">+{tg.length - 3}</span>}</span>}</td>
                     <td className="ptd-reach">
                       {c.email && <span className={`preach ${c.email_consent ? 'on' : ''}`} title={c.email_consent ? 'Email consent' : 'No email consent'}><Icon name="mail" size={13} /><span className="clip">{c.email}</span><span className="sr">{c.email_consent ? 'Email consent' : 'No email consent'}</span></span>}
                       {c.phone && <span className={`preach ${c.wa_consent ? 'on' : ''}`} title={c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}><Icon name="chat" size={13} /><span className="tnum">{fmtPhone(c.phone)}</span><span className="sr">{c.wa_consent ? 'WhatsApp consent' : 'No WhatsApp consent'}</span></span>}
