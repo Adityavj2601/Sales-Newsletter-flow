@@ -31,6 +31,7 @@ const P: Record<string, React.ReactNode> = {
   building: <><path d="M4.5 20.5V5a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 14.5 5v15.5M14.5 9.5H18a1.5 1.5 0 0 1 1.5 1.5v9.5M3 20.5h18M8 7.5h3M8 11h3M8 14.5h3" /></>,
   lock: <><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" /></>,
   warn: <><path d="M12 4.5 2.8 19.5h18.4L12 4.5Z" /><path d="M12 10v4.2" /><circle cx="12" cy="16.9" r=".9" fill="currentColor" stroke="none" /></>,
+  more: <><circle cx="5.5" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="18.5" cy="12" r="1.3" fill="currentColor" stroke="none" /></>,
   poll: <><rect x="4" y="5" width="16" height="3.5" rx="1.75" /><rect x="4" y="10.25" width="11" height="3.5" rx="1.75" /><rect x="4" y="15.5" width="6.5" height="3.5" rx="1.75" /></>,
 };
 export type IconName = keyof typeof P;

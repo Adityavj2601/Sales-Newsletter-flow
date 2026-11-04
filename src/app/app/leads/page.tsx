@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { all, get } from '@/lib/db';
+import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
 import { HOT_SCORE } from '@/lib/tracking';
 import { StagePill, STAGE_LABEL } from '@/components/bits';
@@ -13,59 +13,60 @@ import { setStage } from '../actions';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Leads' };
 
-const VIEWS = [['hot', 'Asked for contact'], ['warm', 'Warming up'], ['pipeline', 'In conversation'], ['all', 'Everyone engaged']] as const;
 const ACT: Record<string, [string, string]> = { interested: ['I’m interested', 'flame'], book: ['Book 15 min', 'calendar'], showcase: ['Our-work card', 'spark'], more: ['Send me more', 'mail'] };
-const WHERE: Record<string, string> = {
-  hot: " AND last_intent IN ('interested','book','showcase') AND stage IN ('new','warm')",
-  warm: " AND score > 0 AND (last_intent IS NULL OR last_intent = 'more') AND stage IN ('new','warm')",
-  pipeline: " AND stage IN ('contacted','meeting')",
-  all: ' AND score > 0',
+/** The stage tiles are the only filter. "All" is everyone who engaged; the rest are pipeline stages. */
+const TILES = ['all', 'new', 'warm', 'contacted', 'meeting', 'won'] as const;
+type Tile = (typeof TILES)[number];
+/** Older links (alerts, nudges) used ?view=…; map them onto the stages. */
+const LEGACY: Record<string, Tile> = { hot: 'all', all: 'all', warm: 'warm', pipeline: 'contacted' };
+const EMPTY: Record<Tile, string> = {
+  all: 'When someone opens an edition or taps “I’m interested”, “Book 15 min” or an Our-work card, they appear here, and intent taps send you an alert.',
+  new: 'Readers who engaged but haven’t tapped anything yet show up here.',
+  warm: 'Readers move here the moment they tap a button in an edition.',
+  contacted: 'After you reply to a lead, tap “Mark contacted” and they move here.',
+  meeting: 'Leads you’ve booked a meeting with show up here.',
+  won: 'Mark a lead as won on their contact page.',
 };
-const PIPE = ['new', 'warm', 'contacted', 'meeting', 'won'] as const;
 
-export default async function Leads({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function Leads({ searchParams }: { searchParams: Promise<{ stage?: string; view?: string }> }) {
   const p = await requireProduct();
-  const view = (await searchParams).view || 'hot';
-  const base = "SELECT * FROM contacts WHERE product_id = ? AND status = 'active'";
-  const sql = base + (WHERE[view] || '') + ' ORDER BY COALESCE(last_intent_at, last_engaged_at) DESC, score DESC LIMIT 300';
-  const rows = all(sql, p.id);
-  const counts = Object.fromEntries(VIEWS.map(([k]) => [k, Number(get(`SELECT COUNT(*) AS n FROM contacts WHERE product_id = ? AND status = 'active'${WHERE[k]}`, p.id)?.n || 0)]));
-  const stageN = Object.fromEntries(all("SELECT stage, COUNT(*) AS n FROM contacts WHERE product_id = ? AND status = 'active' AND (score > 0 OR stage <> 'new') GROUP BY stage", p.id).map((r) => [r.stage, Number(r.n)]));
-  const pipeMax = Math.max(1, ...PIPE.map((k) => stageN[k] || 0));
+  const sp = await searchParams;
+  const stage: Tile = (TILES as readonly string[]).includes(sp.stage || '') ? (sp.stage as Tile) : LEGACY[sp.view || ''] || 'all';
+  const engaged = "SELECT * FROM contacts WHERE product_id = ? AND status = 'active' AND (score > 0 OR stage <> 'new')";
+  const rows = stage === 'all'
+    ? all(`${engaged} ORDER BY COALESCE(last_intent_at, last_engaged_at) DESC, score DESC LIMIT 300`, p.id)
+    : all(`${engaged} AND stage = ? ORDER BY COALESCE(last_intent_at, last_engaged_at) DESC, score DESC LIMIT 300`, p.id, stage);
+  const stageN: Record<string, number> = Object.fromEntries(all("SELECT stage, COUNT(*) AS n FROM contacts WHERE product_id = ? AND status = 'active' AND (score > 0 OR stage <> 'new') GROUP BY stage", p.id).map((r) => [r.stage, Number(r.n)]));
+  const n = (k: Tile) => (k === 'all' ? Object.values(stageN).reduce((a, b) => a + b, 0) : stageN[k] || 0);
   return (
     <div className="leads">
       <div className="ph">
         <div>
-          <span className="eyebrow">{p.newsletter_name || p.name}</span>
+          <span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span>
           <h1>Leads</h1>
-          <p className="sub">Everyone who engaged, ranked by intent. Reply while it’s warm: interest fades within days.</p>
+          <p className="sub">Everyone who engaged, latest intent first. Reply the same day; interest fades fast.</p>
         </div>
         <div className="row">
           <Popover summary={<><Icon name="spark" size={15} />How scoring works</>}>
-              <b>Scores add up per edition</b>
+              <b>Every reader earns points per edition</b>
               <ul>
                 <li><span>Email open</span><span>+1</span></li><li><span>Link click</span><span>+3</span></li><li><span>Open page</span><span>+5</span></li><li><span>Read 75%</span><span>+5</span></li>
                 <li><span>Poll</span><span>+10</span></li><li><span>Share or “send me more”</span><span>+15</span></li><li><span>“Our work” card</span><span>+30</span></li><li><span>Book</span><span>+40</span></li>
                 <li><span>Interested</span><span>+50</span></li><li><span>Not now</span><span>−10</span></li>
               </ul>
-              <span className="hint">{HOT_SCORE}+ is hot and sends you an alert.</span>
+              <span className="hint">The score ranks people; the stage is where they are with you. A tap on Interested, Book or an Our-work card moves a New reader to Warm and sends you an alert.</span>
           </Popover>
           <a className="btn" href="/api/export?type=leads">Export CSV</a>
         </div>
       </div>
 
-      <nav className="lp" aria-label="Pipeline">
-        {PIPE.map((k) => (
-          <Link key={k} href={k === 'contacted' || k === 'meeting' ? '/app/leads?view=pipeline' : '/app/leads?view=all'} className={`lp-s s-${k}`} scroll={false}>
-            <span className="lp-k">{STAGE_LABEL[k]}</span>
-            <span className="lp-v">{stageN[k] || 0}</span>
-            <span className="lp-bar"><i style={{ width: `${((stageN[k] || 0) / pipeMax) * 100}%` }} /></span>
+      <nav className="lp" aria-label="Filter by stage">
+        {TILES.map((k) => (
+          <Link key={k} href={k === 'all' ? '/app/leads' : `/app/leads?stage=${k}`} className={`lp-s s-${k}${n(k) ? '' : ' is-zero'}`} aria-current={stage === k ? 'page' : undefined} scroll={false}>
+            <span className="lp-k">{k === 'all' ? 'All' : STAGE_LABEL[k]}</span>
+            <span className="lp-v">{n(k)}</span>
           </Link>
         ))}
-      </nav>
-
-      <nav className="tabs lseg" aria-label="Lead views">
-        {VIEWS.map(([k, l]) => <Link key={k} href={`/app/leads?view=${k}`} aria-current={view === k ? 'page' : undefined} scroll={false}>{l}<span className="lseg-n">{counts[k]}</span></Link>)}
       </nav>
 
       {rows.length ? (
@@ -76,7 +77,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
               const name = `${c.first_name} ${c.last_name}`.trim() || c.email;
               const wa = c.phone ? `https://wa.me/${String(c.phone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${c.first_name || ''}, `)}` : null;
               const act = c.last_intent ? ACT[c.last_intent] : null;
-              const hot = c.score >= HOT_SCORE;
+              const top = c.score >= HOT_SCORE;
               return (
                 <tr key={c.id}>
                   <td className="ptd-who">
@@ -88,13 +89,13 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
                   <td className="ptd-sig">{c.last_intent
                     ? <span className={`lsig ${c.last_intent === 'more' ? 'info' : 'ok'}`}><Icon name={act?.[1] || 'spark'} size={13} />{act?.[0] || c.last_intent}<small><Rel iso={c.last_intent_at} /></small></span>
                     : <span className="lsig"><Icon name="eye" size={13} />Read<small><Rel iso={c.last_engaged_at} /></small></span>}</td>
-                  <td className="ptd-score"><span className={`lscore ${hot ? 'hot' : c.score >= 15 ? 'warm' : ''}`} title="Lead score"><b>{c.score}</b><span className="lscore-bar"><i style={{ width: `${Math.min(100, (c.score / 100) * 100)}%` }} /></span></span></td>
+                  <td className="ptd-score"><span className={`lscore ${top ? 'hot' : c.score >= 15 ? 'warm' : ''}`} title={`Lead score ${c.score}`}><b>{c.score}</b><span className="lscore-bar"><i style={{ width: `${Math.min(100, c.score)}%` }} /></span></span></td>
                   <td className="ptd-stage"><StagePill stage={c.stage} /></td>
                   <td className="ptd-act"><div className="lact">
-                    {wa && <a className="btn sm wa" href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${name}`}><Icon name="chat" size={14} /><span>WhatsApp</span></a>}
+                    {wa && <a className="btn sm l-wa" href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${name}`}><Icon name="chat" size={14} /><span>WhatsApp</span></a>}
                     {c.email && <a className="btn sm" href={`mailto:${c.email}`} aria-label={`Email ${name}`}><Icon name="mail" size={14} /><span>Email</span></a>}
-                    {(c.stage === 'new' || c.stage === 'warm') && <StageAction action={setStage.bind(null, c.id, 'contacted')} label="Mark contacted" done="Contacted" className="btn sm ghost" />}
-                    {c.stage === 'contacted' && <StageAction action={setStage.bind(null, c.id, 'meeting')} label={STAGE_LABEL.meeting} done="Meeting booked" className="btn sm ghost" />}
+                    {(c.stage === 'new' || c.stage === 'warm') && <StageAction action={setStage.bind(null, c.id, 'contacted')} label={<><Icon name="check" size={14} />Mark contacted</>} done="Contacted" className="btn sm" />}
+                    {c.stage === 'contacted' && <StageAction action={setStage.bind(null, c.id, 'meeting')} label={<><Icon name="calendar" size={14} />Mark meeting</>} done="Meeting booked" className="btn sm" />}
                   </div></td>
                 </tr>
               );
@@ -103,9 +104,10 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
         </div>
       ) : (
         <div className="empty lempty">
-          <span className="lempty-ic"><Icon name={view === 'hot' ? 'flame' : 'users'} size={24} /></span>
-          <b>No one here yet</b>
-          <span>{view === 'hot' ? 'When someone taps “I’m interested”, “Book 15 min” or an Our-work card, they appear here and you get an alert.' : 'Engagement from sent editions shows up here.'}</span>
+          <span className="lempty-ic"><Icon name={stage === 'all' || stage === 'warm' ? 'flame' : 'users'} size={24} /></span>
+          <b>{stage === 'all' ? 'No leads yet' : `No one in ${STAGE_LABEL[stage]}`}</b>
+          <span>{EMPTY[stage]}</span>
+          {stage !== 'all' && n('all') > 0 && <Link className="btn" href="/app/leads" scroll={false}>Show all {n('all')}</Link>}
         </div>
       )}
     </div>

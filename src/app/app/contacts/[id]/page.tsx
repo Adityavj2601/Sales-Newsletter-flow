@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { all, get, parse } from '@/lib/db';
 import { fmtDate, fmtPhone, edNo } from '@/lib/format';
-import { STAGE_LABEL } from '@/components/bits';
-import { HOT_SCORE } from '@/lib/tracking';
+import { STAGE_LABEL, tagLabel } from '@/components/bits';
 import { Submit, Confirm } from '@/components/ui';
 import { Avatar } from '@/components/people/Avatar';
 import { Icon } from '@/components/people/Icon';
@@ -61,14 +60,8 @@ export default async function Contact({ params }: { params: Promise<{ id: string
   const stageActions = Object.fromEntries(Object.keys(STAGE_LABEL).map((k) => [k, setStage.bind(null, id, k)]));
   const notes = parseNotes(c.notes);
   const score = Number(c.score || 0);
-  const heat = score >= HOT_SCORE ? ['ok', 'Hot'] : score >= 15 ? ['warn', 'Warming up'] : ['', score > 0 ? 'Cool' : 'No signal yet'];
-  const info: [string, string, React.ReactNode][] = [
-    ['mail', 'Email', c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : null],
-    ['phone', 'Mobile', c.phone ? <a className="tnum" href={`tel:${c.phone}`}>{fmtPhone(c.phone)}</a> : null],
-    ['building', 'Company', c.company || null],
-    ['briefcase', 'Role', c.role || null],
-    ['pin', 'City', c.city || null],
-  ];
+  // Reader notes already appear in Activity next to the tap that prompted them; Notes holds the team's own notes.
+  const ownNotes = notes.filter((n) => !n.reader);
   const __active = await activeProduct();
   return (
     <div className="pc">
@@ -102,14 +95,13 @@ export default async function Contact({ params }: { params: Promise<{ id: string
           <div className="pc-score">
             <span className="pc-score-v tnum">{score}</span>
             <span className="pc-score-k">Lead score</span>
-            <span className={`pill ${heat[0]}`}>{heat[1]}</span>
             {c.status !== 'active' && <span className="pill bad">{cap(c.status)}</span>}
           </div>
         </div>
-        <div className="pc-stage">
-          <span className="pc-label">Stage</span>
-          <StagePicker stages={Object.entries(STAGE_LABEL)} current={c.stage} actions={stageActions} />
-        </div>
+        <dl className="pc-rows">
+          <div className="pc-stage"><dt className="pc-label">Stage</dt><dd><StagePicker stages={Object.entries(STAGE_LABEL)} current={c.stage} actions={stageActions} /></dd></div>
+          <div><dt className="pc-label">Tags</dt><dd>{tags.length ? <span className="ptags">{tags.map((t) => <span key={t} className="ptag">{tagLabel(t)}</span>)}</span> : <span className="hint">None yet. Add some with Edit.</span>}</dd></div>
+        </dl>
       </section>
 
       {c.last_intent && (
@@ -141,28 +133,20 @@ export default async function Contact({ params }: { params: Promise<{ id: string
           </section>
 
           <section className="card" aria-labelledby="h-notes">
-            <div className="card-head"><h2 id="h-notes">Notes</h2><span className="hint">{notes.length ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}` : 'Add one with Edit'}</span></div>
-            {notes.length ? <ol className="ptl pnotes">{notes.map((n, i) => (
+            <div className="card-head"><h2 id="h-notes">Your notes</h2><span className="hint">{ownNotes.length ? `${ownNotes.length} ${ownNotes.length === 1 ? 'note' : 'notes'}` : 'Add one with Edit'}</span></div>
+            {ownNotes.length ? <ol className="ptl pnotes">{ownNotes.map((n, i) => (
               <li key={i}>
-                <span className={`icon-chip ptl-dot ${n.reader ? 'ok' : ''}`} aria-hidden><Icon name={n.reader ? 'chat' : 'pencil'} size={14} /></span>
+                <span className="icon-chip ptl-dot" aria-hidden><Icon name="pencil" size={14} /></span>
                 <div className="ptl-body">
-                  <div className="ptl-t"><b>{n.reader ? 'From the reader' : 'Your note'}</b>{n.date ? <time dateTime={n.date}>{fmtDate(n.date)}</time> : null}</div>
+                  <div className="ptl-t"><b>Note</b>{n.date ? <time dateTime={n.date}>{fmtDate(n.date)}</time> : null}</div>
                   <p className="pnote">{n.text}</p>
                 </div>
               </li>
-            ))}</ol> : <p className="hint pc-none">Reader notes and your own notes about {c.first_name || 'this person'} appear here.</p>}
+            ))}</ol> : <p className="hint pc-none">Anything your team should remember about {c.first_name || 'this person'}. Notes readers leave appear in Activity.</p>}
           </section>
         </div>
 
         <div className="pc-side">
-          <section className="card pc-info" aria-labelledby="h-info">
-            <div className="card-head"><h2 id="h-info">Details</h2></div>
-            <dl className="pc-list">
-              {info.map(([ic, k, v]) => <div key={k}><dt><Icon name={ic} size={14} />{k}</dt><dd className={v ? '' : 'hint'}>{v || '—'}</dd></div>)}
-              <div><dt><Icon name="tag" size={14} />Tags</dt><dd>{tags.length ? <span className="ptags">{tags.map((t) => <span key={t} className="ptag">{t}</span>)}</span> : <span className="hint">—</span>}</dd></div>
-            </dl>
-          </section>
-
           <section className="card" aria-labelledby="h-consent">
             <div className="card-head"><h2 id="h-consent">Consent</h2><span className="hint">Saved instantly</span></div>
             <ConsentSwitches action={saveContact} c={c} />

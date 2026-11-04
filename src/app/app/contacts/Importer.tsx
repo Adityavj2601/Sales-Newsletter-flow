@@ -106,7 +106,7 @@ export function Importer({ onDone }: { onDone?: () => void }) {
 }
 
 /** Contacts header, import/add sheets and the empty state. Sheets open instantly; the URL keeps ?import=1 / ?add=1 deep-linkable. */
-export function ContactsActions({ title, eyebrow, sub, openImport, openAdd, empty }: { title: string; eyebrow: string; sub: string; openImport: boolean; openAdd: boolean; empty: boolean }) {
+export function ContactsActions({ title, eyebrow, sub, openImport, openAdd, empty }: { title: string; eyebrow: React.ReactNode; sub: string; openImport: boolean; openAdd: boolean; empty: boolean }) {
   const [imp, setImp] = useState(openImport);
   const [add, setAdd] = useState(openAdd);
   const [gen, setGen] = useState(0);
@@ -120,7 +120,6 @@ export function ContactsActions({ title, eyebrow, sub, openImport, openAdd, empt
       <div className="ph">
         <div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p className="sub">{sub}</p></div>
         <div className="row">
-          <a className="btn" href="/api/export?type=contacts">Export CSV</a>
           <button type="button" className="btn" onClick={() => open('import')}><Icon name="upload" size={15} />Import CSV</button>
           <button type="button" className="btn primary" onClick={() => open('add')}><Icon name="plus" size={15} stroke={2.2} />Add contact</button>
         </div>

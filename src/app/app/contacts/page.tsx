@@ -32,12 +32,12 @@ export default async function Contacts({ searchParams }: { searchParams: Promise
   return (
     <div className="contacts">
       <ContactsActions
-        eyebrow={p.newsletter_name || p.name} title="Contacts"
-        sub={`${total} ${total === 1 ? 'contact' : 'contacts'}. Only people who agreed to hear from you get editions, and consent is stored per channel. Unsubscribes are honoured automatically.`}
+        eyebrow={<>{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</>} title="Contacts"
+        sub={`${total ? `${total} ${total === 1 ? 'contact' : 'contacts'}. ` : ''}Only people who agreed to hear from you get editions; consent is stored per channel and unsubscribes are honoured automatically.`}
         openImport={!!sp.import} openAdd={!!sp.add} empty={total === 0}
       />
       {total > 0 && (
-        <ContactsTable rows={shown} tags={tags} q={sp.q || ''} tag={sp.tag || ''} consent={sp.consent || ''} status={sp.status || ''} total={rows.length} capped={rows.length > CAP} action={bulkContacts} />
+        <ContactsTable rows={shown} tags={tags} q={sp.q || ''} tag={sp.tag || ''} consent={sp.consent || ''} status={sp.status || ''} total={rows.length} of={total} capped={rows.length > CAP} action={bulkContacts} />
       )}
     </div>
   );

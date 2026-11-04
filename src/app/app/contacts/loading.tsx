@@ -9,7 +9,6 @@ export default function Loading() {
           <div className="skeleton" style={{ width: 'min(560px, 90%)', height: 15 }} />
         </div>
         <div className="sk-row">
-          <div className="skeleton" style={{ width: 104, height: 34 }} />
           <div className="skeleton" style={{ width: 112, height: 34 }} />
           <div className="skeleton" style={{ width: 124, height: 34 }} />
         </div>
@@ -19,6 +18,7 @@ export default function Loading() {
         <div className="skeleton" style={{ width: 96, height: 36 }} />
         <div className="skeleton" style={{ width: 120, height: 36 }} />
         <div className="skeleton" style={{ width: 104, height: 36 }} />
+        <div className="skeleton" style={{ width: 92, height: 30, marginLeft: 'auto' }} />
       </div>
       <div className="sk-tbl">
         {Array.from({ length: 7 }, (_, i) => (

@@ -9,12 +9,13 @@ import { getProduct, baseUrl, getSetting, smtpReady, waReady } from '@/lib/setti
 import { audienceFor, canSend } from '@/lib/send';
 import { renderWhatsApp } from '@/lib/render/email';
 import { utcToZonedInput, fmtDate, fmtDay, fmtTime, fmtPhone, edNo } from '@/lib/format';
+import { flowState } from '@/lib/flow';
 import { StatusPill } from '@/components/bits';
-import { Copy } from '@/components/ui';
 import { Icon } from '@/components/people/Icon';
 import { Avatar } from '@/components/people/Avatar';
 import { Rel } from '@/components/people/Rel';
-import { EmailSend, WaList } from './Send';
+import { CopyButton } from '@/components/people/CopyButton';
+import { Channels, EmailSend, LogTable, WaList } from './Send';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Send' };
@@ -22,6 +23,7 @@ export const metadata = { title: 'Send' };
 const CH: Record<string, [string, string]> = { email: ['Email', 'mail'], whatsapp: ['WhatsApp API', 'bolt'], wa_manual: ['WhatsApp', 'chat'], test: ['Test email', 'mail'] };
 const ST: Record<string, string> = { failed: 'bad', queued: 'wait', skipped: 'wait', sent: 'ok', delivered: 'ok', opened: 'ok', clicked: 'ok' };
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+const LOG_SHOWN = 5;
 
 export default async function Distribute({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -53,30 +55,57 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
   const defaultAt = e.scheduled_at ? utcToZonedInput(e.scheduled_at, tz) : `${e.planned_for || new Date().toISOString().slice(0, 10)}T${g.sendTime}`;
   const genericWa = renderWhatsApp(e, p, link, '');
 
+  const fs = flowState(e);
   const approved = ['approved', 'scheduled', 'sending', 'sent'].includes(e.status);
   const ready = !blocked;
   const isSent = e.status === 'sent';
+  const live = isSent || e.status === 'sending';
   const q = Number(counts.q || 0), s = Number(counts.s || 0), f = Number(counts.f || 0);
   const progress = q + s + f;
   const waDone = waAud.filter((c) => sentMap[c.id]).length;
+  const reach = new Set([...emailAud, ...waAud].map((c) => c.id)).size;
   const at = (iso: string | null) => `${fmtDay(iso, tz)}, ${fmtTime(iso, tz)}`;
   const editor = `/app/editions/${e.id}`;
-  const fixLabel = approved ? 'Open editor to fix checks' : 'Open editor to approve';
+  const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
+  const audienceLine = reach ? `${people(emailAud.length)} by email · ${waAud.length} on WhatsApp.` : 'No one has agreed to email or WhatsApp yet.';
 
-  // One summary line that follows the edition's state.
-  const sum = isSent ? { tone: 'ok', icon: 'check', h: `Sent ${at(e.sent_at)}`, d: <>{s} delivered{f ? ` · ${f} failed` : ''}{q ? ` · ${q} still going out` : ''}. New contacts can still get it below.</> }
-    : e.status === 'scheduled' ? { tone: '', icon: 'calendar', h: `Scheduled for ${at(e.scheduled_at)}`, d: <>Goes out <Rel iso={e.scheduled_at} /> ({tz}). You can cancel or send now instead.</> }
+  // One summary that follows the weekly flow (lib/flow): what happened, or the single next thing to do.
+  const sum = isSent ? { tone: 'ok', icon: 'check', h: `Sent ${at(e.sent_at)}`, d: <>{s} delivered{f ? ` · ${f} failed` : ''}{q ? ` · ${q} still going out` : ''}. New contacts can still get it.</> }
     : e.status === 'sending' ? { tone: '', icon: 'send', h: 'Sending now', d: <>{s} of {progress} delivered. You can close this page.</> }
-    : ready ? { tone: '', icon: 'send', h: 'Ready to send', d: emailAud.length || waAud.length ? <>{emailAud.length} {emailAud.length === 1 ? 'person' : 'people'} by email · {waAud.length} on WhatsApp. Pick a channel below.</> : <>No one has agreed to email or WhatsApp yet. Import contacts first, or share the link.</> }
-    : { tone: 'warn', icon: 'lock', h: approved ? 'Checks are blocking this edition' : 'Not approved yet', d: <>{blocked} Sending unlocks as soon as it’s done; until then you can send yourself a test.</> };
+    : e.status === 'scheduled' ? { tone: '', icon: 'calendar', h: `Scheduled for ${at(e.scheduled_at)}`, d: <>Goes out <Rel iso={e.scheduled_at} /> ({tz}). You can cancel it or send now instead.</> }
+    : ready ? { tone: '', icon: 'send', h: fs.title, d: <>Approved and ready. {audienceLine}{reach ? '' : ' Import contacts, or share the link.'}</> }
+    : approved ? { tone: 'warn', icon: 'warn', h: 'Fix the checks', d: <>{blocked} Sending unlocks as soon as they pass.</> }
+    : { tone: 'warn', icon: 'lock', h: fs.title, d: <>Sending unlocks once it’s approved. Until then you can send yourself a test.</> };
 
-  const tiles = [
-    { href: '#email', icon: 'mail', tone: 'blue', name: 'Email', state: gotEmail.size ? `${gotEmail.size} sent` : `${emailAud.length} with consent`, ok: gotEmail.size > 0 },
-    { href: '#wa', icon: 'chat', tone: 'green', name: 'WhatsApp, one by one', state: waAud.length ? `${waDone} of ${waAud.length} sent` : 'No one opted in', ok: waAud.length > 0 && waDone === waAud.length },
-    { href: '#link', icon: 'link', tone: 'indigo', name: 'Share the link', state: isSent ? 'Live' : 'Preview only', ok: isSent },
-    { href: '#wa-api', icon: 'bolt', tone: 'orange', name: 'WhatsApp API', state: waOn ? 'Connected' : 'Not connected', ok: waOn },
+  // Readiness, named as tasks while they're still to do.
+  const checksOk = approved ? ready : fs.current === 'approve';
+  const steps = [
+    { ok: checksOk, warn: !checksOk && fs.blockers > 0, t: checksOk ? 'Checks pass' : approved || fs.blockers ? 'Fix the checks' : 'Run checks', d: checksOk ? 'Nothing blocking' : approved ? String(blocked) : fs.detail },
+    { ok: approved, warn: false, t: approved ? 'Approved' : 'Approve', d: approved ? (e.approved_by ? `by ${e.approved_by}` : 'Signed off') : checksOk ? 'Ready for sign-off' : 'After the checks pass' },
+    { ok: reach > 0, warn: reach === 0, t: reach ? `${people(reach)} can get it` : 'Add contacts', d: reach ? `${emailAud.length} email · ${waAud.length} WhatsApp` : 'No one has agreed yet', href: reach ? undefined : '/app/contacts' },
   ];
-  const dot = (ok: boolean, n: string) => <span className="snd-dot">{ok ? <Icon name="check" size={12} stroke={2.6} /> : n}</span>;
+
+  const channels = [
+    { key: 'email', label: 'Email', icon: 'mail', badge: live ? `${gotEmail.size}` : `${emailAud.length}`, hint: live ? 'sent' : 'with consent' },
+    { key: 'whatsapp', label: 'WhatsApp', icon: 'chat', badge: waAud.length ? `${waDone}/${waAud.length}` : '0', hint: 'sent' },
+    { key: 'link', label: 'Link', icon: 'link' },
+    { key: 'api', label: 'WhatsApp API', short: 'API', icon: 'bolt', badge: waOn ? undefined : 'Off' },
+  ];
+  const logRow = (d: any) => {
+    const who = `${d.first_name || ''} ${d.last_name || ''}`.trim() || d.email || fmtPhone(d.phone);
+    const [chName, chIcon] = CH[d.channel] || [d.channel, 'doc'];
+    const when = d.sent_at || d.created_at;
+    return (
+      <tr key={d.id}>
+        <td>{d.contact_id ? <Link className="snd-who" href={`/app/contacts/${d.contact_id}`}><Avatar name={who || '?'} size={26} /><span>{who}</span></Link> : <span className="snd-who"><span className="snd-test"><Icon name="spark" size={13} /></span><span className="hint">Test</span></span>}</td>
+        <td><span className="snd-ch"><Icon name={chIcon} size={14} />{chName}</span></td>
+        <td><span className={`snd-st ${ST[d.status] || 'wait'}`}><i />{cap(d.status)}</span></td>
+        <td className="hint"><Rel iso={when} title={fmtDate(when, tz, true)} /></td>
+        <td className="hint clip">{d.error || ''}</td>
+      </tr>
+    );
+  };
+  const logHead = <thead><tr><th>Who</th><th>Channel</th><th>Status</th><th>When</th><th>Note</th></tr></thead>;
 
   const __active = await activeProduct();
   return (
@@ -86,17 +115,17 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
         <div>
           <div className="crumbs"><Link href="/app/editions">Editions</Link> / <Link href={editor}>{edNo(e.number)}</Link> / Send</div>
           <h1>{e.content.title}</h1>
-          <p className="sub">{p.newsletter_name || p.name} · Edition {edNo(e.number)}{e.planned_for && !isSent ? ` · planned for ${fmtDay(e.planned_for, tz)}` : ''}</p>
+          <p className="sub">{p.newsletter_name || p.name} · Edition {edNo(e.number)}{e.planned_for && !live ? ` · planned for ${fmtDay(e.planned_for, tz)}` : ''}</p>
         </div>
         <div className="row">
-          <a className="btn" href={link + (isSent ? '' : '?preview=1')} target="_blank" rel="noreferrer"><Icon name="eye" size={15} />Preview</a>
-          {blocked && !isSent
-            ? <><Link className="btn" href={`/app/editions/${e.id}/analytics`}><Icon name="chart" size={15} />Results</Link><Link className="btn primary" href={editor}><Icon name="pencil" size={15} />{fixLabel}</Link></>
-            : <Link className={`btn ${isSent ? 'primary' : ''}`} href={`/app/editions/${e.id}/analytics`}><Icon name="chart" size={15} />Results</Link>}
+          <a className="btn" href={link + (isSent ? '' : '?preview=1')} target="_blank" rel="noreferrer"><Icon name="eye" size={15} />{isSent ? 'Open page' : 'Preview'}</a>
+          {!ready && !live
+            ? <Link className="btn primary" href={editor}><Icon name="pencil" size={15} />{approved ? 'Open editor' : fs.cta}</Link>
+            : <Link className={`btn${live ? ' primary' : ''}`} href={`/app/editions/${e.id}/analytics`}><Icon name="chart" size={15} />Results</Link>}
         </div>
       </div>
 
-      <section className={`card snd-hero is-${isSent ? 'sent' : ready ? 'ready' : 'blocked'}`} aria-label="Send summary">
+      <section className={`card snd-hero is-${live ? 'sent' : ready ? 'ready' : 'blocked'}`} aria-label="Send summary">
         <div className="snd-sum">
           <span className={`icon-chip snd-sum-ic ${sum.tone}`} aria-hidden><Icon name={sum.icon} size={20} /></span>
           <div className="snd-sum-t">
@@ -106,12 +135,14 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
           <StatusPill status={e.status} />
         </div>
 
-        <ol className="snd-ready" aria-label="Readiness">
-          <li className={approved ? 'ok' : 'todo'}>{dot(approved, '1')}<div><b>Approved</b><span>{approved ? (e.approved_by ? `by ${e.approved_by}` : 'Signed off') : 'Approve it in the editor'}</span></div></li>
-          <li className={ready ? 'ok' : approved ? 'warn' : 'todo'}>{dot(ready, '2')}<div><b>Checks</b><span>{ready ? 'All blocking checks pass' : approved ? blocked : 'Run before approving'}</span></div></li>
-          <li className={emailAud.length || waAud.length ? 'ok' : 'warn'}>{dot(!!(emailAud.length || waAud.length), '3')}<div><b>Audience</b><span>{emailAud.length} email · {waAud.length} WhatsApp</span></div></li>
-          <li className={smtpOn ? 'ok' : 'info'}><span className="snd-dot">{smtpOn ? <Icon name="check" size={12} stroke={2.6} /> : <Icon name="doc" size={12} stroke={2.2} />}</span><div><b>Email delivery</b><span>{smtpOn ? 'SMTP connected' : 'Outbox mode: saved, not sent'}</span></div></li>
-        </ol>
+        {!live && (
+          <ol className={`snd-ready${steps.every((st) => st.ok) ? ' all-ok' : ''}`} aria-label="Before you send">
+            {steps.map((st, i) => {
+              const body = <><span className="snd-dot" aria-hidden>{st.ok ? <Icon name="check" size={12} stroke={2.6} /> : i + 1}</span><span className="snd-ready-t"><b>{st.t}</b><span>{st.d}</span></span></>;
+              return <li key={i} className={st.ok ? 'ok' : st.warn ? 'warn' : 'todo'}>{st.href ? <Link href={st.href} className="snd-ready-a">{body}</Link> : body}</li>;
+            })}
+          </ol>
+        )}
 
         {progress > 0 && (
           <div className="snd-progress" aria-label="Delivery progress">
@@ -130,95 +161,55 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
         )}
       </section>
 
-      <nav className="snd-tiles" aria-label="Channels">
-        {tiles.map((t) => (
-          <a key={t.href} href={t.href} className="snd-tile">
-            <span className={`snd-ico tn-${t.tone}`}><Icon name={t.icon} size={17} /></span>
-            <span className="snd-tile-text"><b>{t.name}</b><span className={t.ok ? 'ok' : ''}>{t.ok && <Icon name="check" size={11} stroke={2.6} />}{t.state}</span></span>
-          </a>
-        ))}
-      </nav>
-
-      <section className="card snd-sec" id="email" aria-labelledby="h-email">
-        <header className="snd-sec-head">
-          <span className="snd-ico tn-blue"><Icon name="mail" size={18} /></span>
-          <div><h2 id="h-email">Email</h2><p>Every person gets their own tracked link, so you see who read and who tapped.</p></div>
-          <span className={`pill ${smtpOn ? 'ok' : 'warn'}`}><span className="dot" />{smtpOn ? 'SMTP connected' : 'Outbox mode'}</span>
-        </header>
-        <EmailSend editionId={e.id} status={e.status} blocked={blocked || ''} editorHref={editor} fixLabel={fixLabel} total={emailAud.length} emailPeople={pick(emailAud, gotEmail)} waPeople={pick(waApiAud, gotWa)} failed={failedCount} tags={tags} cities={cities} waApi={waOn} defaultAt={defaultAt} tz={tz} pace={g.emailsPerMinute} smtp={smtpOn} scheduledLabel={e.status === 'scheduled' ? at(e.scheduled_at) : ''} scheduledAt={e.scheduled_at || ''} />
-      </section>
-
-      <section className="card snd-sec" id="wa" aria-labelledby="h-wa">
-        <header className="snd-sec-head">
-          <span className="snd-ico tn-green"><Icon name="chat" size={18} /></span>
-          <div><h2 id="h-wa">WhatsApp, one by one</h2><p>The safest way to start. WhatsApp opens with their personal message filled in, and you press send.</p></div>
-        </header>
-        <WaList editionId={e.id} blocked={blocked || ''} contacts={waAud.map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim(), company: c.company, phone: fmtPhone(c.phone), sent: !!sentMap[c.id] }))} />
-        <p className="snd-foot"><Icon name="clock" size={13} />Keep a human pace (a few dozen a day) and only message people who agreed to WhatsApp. Reports and blocks lower your number’s quality rating.</p>
-      </section>
-
-      <section className="card snd-sec" id="link" aria-labelledby="h-link">
-        <header className="snd-sec-head">
-          <span className="snd-ico tn-indigo"><Icon name="link" size={18} /></span>
-          <div><h2 id="h-link">Share the link</h2><p>Post it anywhere. Opens are counted, but not tied to a person.{isSent ? '' : ' Until it’s sent, the link only works as a preview for you.'}</p></div>
-        </header>
-        <div className="snd-link">
-          <div className="snd-link-main">
-            <label className="f"><span>Public link</span>
-              <div className="snd-url"><input className="in" readOnly value={link} aria-label="Public link" /><Copy text={link} className="btn sm" /></div>
-            </label>
-            <div className="snd-link-actions">
-              <a className="btn sm" href={link + (isSent ? '' : '?preview=1')} target="_blank" rel="noreferrer">Open page<Icon name="out" size={13} /></a>
-              <a className="btn sm" href={`/api/editions/${e.id}/export?format=html`} target="_blank" rel="noreferrer">Email HTML<Icon name="out" size={13} /></a>
-              <Copy text={`${base}/og/${e.id}.png`} label="Copy preview image URL" className="btn sm" />
+      <Channels items={channels}>
+        <div className="snd-pane">
+          <p className="snd-intro"><span>Everyone gets their own tracked link, so you see who read and who tapped.</span><span className={`pill ${smtpOn ? 'ok' : 'warn'}`}><span className="dot" />{smtpOn ? 'SMTP connected' : 'Outbox mode'}</span></p>
+          <EmailSend editionId={e.id} status={e.status} blocked={blocked || ''} tags={tags} cities={cities} waApi={waOn} defaultAt={defaultAt} tz={tz} pace={g.emailsPerMinute} emailPeople={pick(emailAud, gotEmail)} waPeople={pick(waApiAud, gotWa)} failed={failedCount} smtp={smtpOn} scheduledLabel={e.status === 'scheduled' ? at(e.scheduled_at) : ''} scheduledAt={e.scheduled_at || ''} />
+        </div>
+        <div className="snd-pane">
+          <p className="snd-intro"><span>The safest way to start: WhatsApp opens with their personal message filled in, and you press send.</span></p>
+          <WaList editionId={e.id} blocked={blocked || ''} contacts={waAud.map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim(), company: c.company, phone: fmtPhone(c.phone), sent: !!sentMap[c.id] }))} />
+          <p className="snd-foot"><Icon name="clock" size={13} />Keep a human pace (a few dozen a day) and only message people who agreed to WhatsApp. Reports and blocks lower your number’s quality rating.</p>
+        </div>
+        <div className="snd-pane">
+          <p className="snd-intro"><span>Post it anywhere. Opens are counted, but not tied to a person.{isSent ? '' : ' Until it’s sent, the link only works as a preview for you.'}</span><span className={`pill ${isSent ? 'ok' : ''}`}><span className="dot" />{isSent ? 'Live' : 'Preview only'}</span></p>
+          <div className="snd-link">
+            <div className="snd-link-main">
+              <label className="f"><span>Public link</span>
+                <div className="snd-url"><input className="in" readOnly value={link} aria-label="Public link" /><CopyButton text={link} /></div>
+              </label>
+              <div className="snd-link-actions">
+                <a className="btn sm" href={link + (isSent ? '' : '?preview=1')} target="_blank" rel="noreferrer">Open page<Icon name="out" size={13} /></a>
+                <a className="btn sm" href={`/api/editions/${e.id}/export?format=html`} target="_blank" rel="noreferrer">Email HTML<Icon name="out" size={13} /></a>
+                <CopyButton text={`${base}/og/${e.id}.png`} label="Copy image URL" />
+              </div>
+              <p className="hint">Using Mailchimp, Brevo or Apollo? Open “Email HTML” and paste the code into that tool.</p>
             </div>
-            <p className="hint">Using Mailchimp, Brevo or Apollo instead? Open “Email HTML” and paste the code into that tool.</p>
-          </div>
-          <div className="snd-bubble-wrap">
-            <div className="snd-bubble-head"><span>WhatsApp text (generic)</span><Copy text={genericWa} className="btn sm" /></div>
-            <div className="snd-bubble"><p>{genericWa}</p></div>
+            <div className="snd-bubble-wrap">
+              <div className="snd-bubble-head"><span>WhatsApp text (generic)</span><CopyButton text={genericWa} /></div>
+              <div className="snd-bubble"><p>{genericWa}</p></div>
+            </div>
           </div>
         </div>
-      </section>
-
-      <section className="card snd-sec" id="wa-api" aria-labelledby="h-api">
-        <header className="snd-sec-head">
-          <span className="snd-ico tn-orange"><Icon name="bolt" size={18} /></span>
-          <div><h2 id="h-api">WhatsApp Business API</h2>
-            {waOn ? <p>Switch on “Also send via WhatsApp Business API” in the Email section to send your approved template (with the preview image and quick-reply buttons) to everyone with WhatsApp consent.</p>
-              : <p>For larger lists, connect Meta’s WhatsApp Cloud API with an approved Marketing template. Prospects then tap “Interested” right inside WhatsApp.</p>}
+        <div className="snd-pane">
+          <div className="snd-api">
+            <span className="icon-chip" aria-hidden><Icon name="bolt" size={17} /></span>
+            <div>
+              <b>{waOn ? 'WhatsApp Business API is connected' : 'Send to larger lists through WhatsApp'}</b>
+              {waOn ? <p>Switch on “Also send via WhatsApp Business API” under Email to send your approved template (with the preview image and quick-reply buttons) to everyone with WhatsApp consent.</p>
+                : <p>Connect Meta’s WhatsApp Cloud API with an approved Marketing template. Prospects then tap “Interested” right inside WhatsApp.</p>}
+            </div>
+            {waOn ? <span className="pill ok"><span className="dot" />Connected</span> : <Link className="btn" href="/app/settings?tab=whatsapp">Set it up<Icon name="arrow" size={13} /></Link>}
           </div>
-          {waOn ? <span className="pill ok"><span className="dot" />Connected</span> : <Link className="btn sm" href="/app/settings?tab=whatsapp">Set it up<Icon name="arrow" size={13} /></Link>}
-        </header>
-      </section>
+        </div>
+      </Channels>
 
-      <section className="card snd-sec" aria-labelledby="h-log">
-        <header className="snd-sec-head">
-          <span className="snd-ico tn-gray"><Icon name="doc" size={18} /></span>
-          <div><h2 id="h-log">Delivery log</h2><p>{dl.length ? `Latest ${Math.min(60, dl.length)} messages, newest first.` : 'Messages appear here as they go out.'}</p></div>
-        </header>
-        {dl.length ? (
-          <div className="snd-log">
-            <table className="tbl">
-              <thead><tr><th>Who</th><th>Channel</th><th>Status</th><th>When</th><th>Note</th></tr></thead>
-              <tbody>{dl.map((d) => {
-                const who = `${d.first_name || ''} ${d.last_name || ''}`.trim() || d.email || fmtPhone(d.phone);
-                const [chName, chIcon] = CH[d.channel] || [d.channel, 'doc'];
-                const when = d.sent_at || d.created_at;
-                return (
-                  <tr key={d.id}>
-                    <td>{d.contact_id ? <Link className="snd-who" href={`/app/contacts/${d.contact_id}`}><Avatar name={who || '?'} size={26} /><span>{who}</span></Link> : <span className="snd-who"><span className="snd-test"><Icon name="spark" size={13} /></span><span className="hint">Test</span></span>}</td>
-                    <td><span className="snd-ch"><Icon name={chIcon} size={14} />{chName}</span></td>
-                    <td><span className={`snd-st ${ST[d.status] || 'wait'}`}><i />{cap(d.status)}</span></td>
-                    <td className="hint"><Rel iso={when} title={fmtDate(when, tz, true)} /></td>
-                    <td className="hint clip">{d.error || ''}</td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-          </div>
-        ) : <div className="snd-empty"><Icon name="send" size={22} /><span>Nothing sent yet.</span></div>}
-      </section>
+      {dl.length > 0 && (
+        <section className="card snd-logcard" aria-labelledby="h-log">
+          <div className="card-head"><h2 id="h-log">Delivery log</h2><span className="hint">Newest first</span></div>
+          <LogTable head={logHead} rows={dl.map(logRow)} shown={LOG_SHOWN} />
+        </section>
+      )}
     </div>
   );
 }

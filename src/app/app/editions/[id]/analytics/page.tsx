@@ -12,6 +12,7 @@ import { StatusPill, Score } from '@/components/bits';
 import { Icon } from '@/components/people/Icon';
 import { Avatar } from '@/components/people/Avatar';
 import { Rel } from '@/components/people/Rel';
+import { Popover } from '@/components/people/Popover';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Results' };
@@ -80,10 +81,15 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
           <p className="sub res-sub"><StatusPill status={e.status} /><span>{e.sent_at ? `Sent ${fmtDay(e.sent_at, tz)}, ${fmtTime(e.sent_at, tz)}` : 'Not sent yet. Tests and previews are never counted.'}</span></p>
         </div>
         <div className="row">
-          <a className="btn" href={`/api/export?type=events&edition=${e.id}`}>Export CSV</a>
+          <Popover className="pmenu" summary={<><Icon name="more" size={18} /><span className="pmenu-l">More</span></>}>
+            {isSent
+              ? <Link href={`/app/editions/${e.id}/distribute`}><Icon name="send" size={15} />Send to new contacts</Link>
+              : <a href={`${link}?preview=1`} target="_blank" rel="noreferrer"><Icon name="eye" size={15} />Preview</a>}
+            <a href={`/api/export?type=events&edition=${e.id}`}><Icon name="doc" size={15} />Export CSV</a>
+          </Popover>
           {isSent
-            ? <><Link className="btn" href={`/app/editions/${e.id}/distribute`}><Icon name="send" size={15} />Send to new contacts</Link><a className="btn primary" href={link} target="_blank" rel="noreferrer">Open page<Icon name="out" size={13} /></a></>
-            : <><a className="btn" href={`${link}?preview=1`} target="_blank" rel="noreferrer">Preview<Icon name="out" size={13} /></a><Link className="btn primary" href={`/app/editions/${e.id}/distribute`}><Icon name="send" size={15} />Go to Send</Link></>}
+            ? <a className="btn" href={link} target="_blank" rel="noreferrer">Open page<Icon name="out" size={13} /></a>
+            : <Link className="btn primary" href={`/app/editions/${e.id}/distribute`}><Icon name="send" size={15} />Go to Send</Link>}
         </div>
       </div>
 
