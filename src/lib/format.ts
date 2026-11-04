@@ -76,3 +76,20 @@ export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
 export function personalize(tpl: string, vars: Record<string, string>) {
   return tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)).replace(/^,\s*/, '').replace(/^\s*([a-z])/, (s) => s.toUpperCase());
 }
+
+/** "+919811111111" → "+91 98111 11111" (other countries: "+CC rest" grouped). */
+export function fmtPhone(p: string | null | undefined): string {
+  if (!p) return '';
+  const d = String(p).replace(/[^\d+]/g, '');
+  const m = d.match(/^\+91(\d{5})(\d{5})$/);
+  if (m) return `+91 ${m[1]} ${m[2]}`;
+  const g = d.match(/^\+(\d{1,3})(\d+)$/);
+  return g ? `+${g[1]} ${g[2].replace(/(\d{3,4})(?=\d{3,4}$)/, '$1 ')}` : String(p);
+}
+/** Edition number everywhere: "#2". */
+export const edNo = (n: number) => `#${n}`;
+/** "9:01 pm" in the app's time zone (en-IN, 12-hour). */
+export function fmtTime(iso: string | null | undefined, tz = TZ_DEFAULT) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleTimeString('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s?(am|pm)$/i, (x) => ` ${x.trim().toLowerCase()}`);
+}

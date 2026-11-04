@@ -85,12 +85,13 @@ export function startDueEditions(log: (s: string) => void) {
   for (const e of all("SELECT id, send_config FROM editions WHERE status = 'scheduled' AND scheduled_at <= ?", now())) {
     try {
       const n = queueEdition(e.id, parse(e.send_config, { channels: ['email'], audience: {} }));
-      log(`Started scheduled edition ${e.id}: ${n} queued`);
+      const ed = getEdition(e.id);
+      log(`Started scheduled edition #${ed?.number} “${ed?.content.title}”: ${n} queued`);
     } catch (err: any) {
       update('editions', e.id, { status: 'approved', scheduled_at: null });
       const ed = getEdition(e.id);
       notify(ed?.product_id || null, 'error', `Scheduled send did not start for #${ed?.number}`, String(err?.message || err), `/app/editions/${e.id}/distribute`);
-      log(`✕ ${e.id}: ${err?.message || err}`);
+      log(`✕ #${ed?.number} “${ed?.content.title || ''}”: ${err?.message || err}`);
     }
   }
 }
@@ -238,7 +239,7 @@ export async function processQueue(log: (s: string) => void) {
       markFeatured(e.id);
       const s = get("SELECT SUM(status NOT IN ('failed','skipped')) AS ok, SUM(status = 'failed') AS bad FROM deliveries WHERE edition_id = ? AND channel IN ('email','whatsapp')", e.id);
       notify(e.product_id, 'send', `Edition #${e.number} sent`, `${s?.ok || 0} delivered${s?.bad ? `, ${s.bad} failed` : ''}.`, `/app/editions/${e.id}/analytics`);
-      log(`Edition ${e.id} finished`);
+      log(`Edition #${e.number} finished sending`);
     }
   }
 }

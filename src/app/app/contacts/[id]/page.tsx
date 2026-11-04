@@ -1,3 +1,5 @@
+import { EnsureProduct } from '@/components/EnsureProduct';
+import { activeProduct } from '@/lib/context';
 import { requireUser } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -45,8 +47,10 @@ export default async function Contact({ params }: { params: Promise<{ id: string
     ['briefcase', 'Role', c.role || null],
     ['pin', 'City', c.city || null],
   ];
+  const __active = await activeProduct();
   return (
     <div className="pc">
+      <EnsureProduct productId={c.product_id} activeId={__active?.id || null} />
       <div className="crumbs"><Link href="/app/contacts">Contacts</Link> / {name}</div>
 
       <section className="card pc-hero" aria-labelledby="pc-name">

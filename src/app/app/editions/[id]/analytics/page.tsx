@@ -1,3 +1,5 @@
+import { EnsureProduct } from '@/components/EnsureProduct';
+import { activeProduct } from '@/lib/context';
 import { requireUser } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -63,8 +65,10 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
   ];
   const top = Math.max(1, delivered, viewers, s50, intents);
 
+  const __active = await activeProduct();
   return (
     <div className="res">
+      <EnsureProduct productId={e.product_id} activeId={__active?.id || null} />
       <div className="ph">
         <div>
           <div className="crumbs"><Link href="/app/editions">Editions</Link> / <Link href={`/app/editions/${e.id}`}>#{e.number}</Link> / Results</div>

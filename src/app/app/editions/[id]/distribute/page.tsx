@@ -1,3 +1,5 @@
+import { EnsureProduct } from '@/components/EnsureProduct';
+import { activeProduct } from '@/lib/context';
 import { requireUser } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -66,8 +68,10 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
     { href: '#wa-api', icon: 'bolt', tone: 'orange', name: 'WhatsApp API', state: waOn ? 'Connected' : 'Not connected', ok: waOn },
   ];
 
+  const __active = await activeProduct();
   return (
     <div className="snd">
+      <EnsureProduct productId={e.product_id} activeId={__active?.id || null} />
       <div className="crumbs"><Link href="/app/editions">Editions</Link> / <Link href={`/app/editions/${e.id}`}>#{e.number}</Link> / Send</div>
 
       <section className={`card snd-hero ${isSent ? 'is-sent' : ready ? 'is-ready' : 'is-blocked'}`} aria-labelledby="snd-title">
