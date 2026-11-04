@@ -32,6 +32,8 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .stage { min-width: 0; }
 .side { padding: 14px 10px 12px; gap: 12px; scrollbar-width: none; }
 .side::-webkit-scrollbar { display: none; }
+/* Short viewports: nothing in the sidebar shrinks; the column scrolls instead. */
+.side > * { flex-shrink: 0; }
 .brand { padding: 4px 6px 2px; gap: 10px; min-height: 34px; }
 .brand-name { font: 600 15.5px/1.2 var(--f-display); letter-spacing: -0.018em; }
 .brand-mark { width: 28px; height: 28px; border-radius: var(--r-sm); background: var(--mark); color: #fff; }

@@ -78,7 +78,7 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
     : e.status === 'scheduled' ? { tone: '', icon: 'calendar', h: `Scheduled for ${at(e.scheduled_at)}`, d: <>Goes out <Rel iso={e.scheduled_at} /> ({tz}). You can cancel it or send now instead.</> }
     : ready ? { tone: '', icon: 'send', h: fs.title, d: <>Approved and ready. {audienceLine}{reach ? '' : ' Import contacts, or share the link.'}</> }
     : approved ? { tone: 'warn', icon: 'warn', h: 'Fix the checks', d: <>{blocked} Sending unlocks as soon as they pass.</> }
-    : { tone: 'warn', icon: 'lock', h: fs.title, d: <>Sending unlocks once it’s approved. Until then you can send yourself a test.</> };
+    : { tone: 'warn', icon: 'lock', h: fs.title, d: <>{fs.detail}</> };
 
   // Readiness, named as tasks while they're still to do.
   const checksOk = approved ? ready : fs.current === 'approve';

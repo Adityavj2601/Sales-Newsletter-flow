@@ -2,7 +2,7 @@ import { Icon, type IconName } from './icons';
 
 /** Notification kinds → icon + tint. */
 const KINDS: Record<string, [IconName, string]> = {
-  intent: ['leads', 'orange'], draft: ['editions', 'blue'], send: ['send', 'green'], stories: ['stories', 'indigo'],
+  intent: ['leads', 'green'], draft: ['editions', 'blue'], send: ['send', 'green'], stories: ['stories', 'indigo'],
   nudge: ['hand', 'yellow'], report: ['chart', 'purple'], error: ['warn', 'red'], note: ['note', 'teal'],
 };
 export function KindIcon({ kind, title = '', size = 32 }: { kind: string; title?: string; size?: number }) {

@@ -88,6 +88,9 @@
 .menu-sep { height: 0.5px; background: var(--line); margin: 5px 8px; }
 .menu-danger > .btn, .menu-danger form .btn { justify-content: flex-start; background: transparent; padding: 7px 10px; font-size: 14px; border-radius: var(--r-sm); }
 .menu-danger > .btn { width: 100%; }
+.ed-menu .menu-danger > .btn::before { content: ''; width: 16px; height: 16px; flex: none; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3'/%3E%3C/svg%3E") center / contain no-repeat; }
 .menu-danger > .btn:hover { background: var(--bad); color: #fff; }
 .menu-danger form { display: flex !important; gap: 6px; padding: 4px; }
 .menu-danger form .btn.danger { background: var(--bad); color: #fff; }

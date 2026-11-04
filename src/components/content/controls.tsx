@@ -208,7 +208,7 @@ function until(ms: number) {
   if (ms <= 30_000) return 'due now';
   const f = ms / 1000;
   if (f < 3600) return `in ${Math.max(1, Math.round(f / 60))} min`;
-  if (f < 86400) return `in ${Math.round(f / 3600)} h`;
+  if (f < 86400) { const n = Math.round(f / 3600); return `in ${n} hour${n === 1 ? '' : 's'}`; }
   { const n = Math.round(f / 86400); return `in ${n} day${n === 1 ? '' : 's'}`; }
 }
 export function Countdown({ iso }: { iso: string }) {

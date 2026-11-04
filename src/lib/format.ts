@@ -23,12 +23,12 @@ export function ago(iso: string | null | undefined) {
   if (s < 0) {
     const f = -s;
     if (f < 3600) return `in ${Math.max(1, Math.round(f / 60))} min`;
-    if (f < 86400) return `in ${Math.round(f / 3600)} h`;
+    if (f < 86400) { const n = Math.round(f / 3600); return `in ${n} hour${n === 1 ? '' : 's'}`; }
     { const n = Math.round(f / 86400); return `in ${n} day${n === 1 ? '' : 's'}`; }
   }
   if (s < 60) return 'just now';
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 86400) { const n = Math.round(s / 3600); return `${n} hour${n === 1 ? '' : 's'} ago`; }
   { const n = Math.round(s / 86400); return `${n} day${n === 1 ? '' : 's'} ago`; }
 }
 
