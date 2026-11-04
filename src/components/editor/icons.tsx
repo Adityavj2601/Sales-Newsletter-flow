@@ -1,10 +1,18 @@
-/* SF Symbols–style line icons (20×20, currentColor) and per-block metadata for the editor. */
+/* Editor glyphs on the app's canonical icon geometry (see components/shell/icons.tsx):
+   24-unit viewBox, 1.7 stroke, round caps and joins. Glyphs the shell already draws are
+   re-used from it; editor-only glyphs are drawn on a 20-unit sub-grid scaled x1.2 into the
+   same 24-unit box, with the stroke compensated so it renders at the shared 1.7 weight. */
 import type { BlockType } from '@/lib/types';
+import { Icon, type IconName } from '@/components/shell/icons';
 
 type P = { size?: number; className?: string };
-const S = ({ size = 18, className, children, sw = 1.6 }: P & { children: React.ReactNode; sw?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden focusable="false">{children}</svg>
+const SW = 1.7;
+const S = ({ size = 18, className, children, sw = SW }: P & { children: React.ReactNode; sw?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden focusable="false">
+    <g transform="scale(1.2)" strokeWidth={sw / 1.2}>{children}</g>
+  </svg>
 );
+const sh = (name: IconName, sw = SW) => function ShellGlyph({ size = 18, className }: P) { return <Icon name={name} size={size} strokeWidth={sw} className={className ? `ico ${className}` : 'ico'} />; };
 
 export const I = {
   list: (p: P) => <S {...p}><circle cx="4" cy="5.5" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="14.5" r="1" fill="currentColor" stroke="none" /><path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h6" /></S>,
@@ -24,12 +32,12 @@ export const I = {
   up: (p: P) => <S {...p}><path d="M10 15.5v-11M5.5 9 10 4.5 14.5 9" /></S>,
   down: (p: P) => <S {...p}><path d="M10 4.5v11M5.5 11l4.5 4.5 4.5-4.5" /></S>,
   trash: (p: P) => <S {...p}><path d="M3.8 5.5h12.4M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5.4 5.5l.7 10.3a1.3 1.3 0 0 0 1.3 1.2h5.2a1.3 1.3 0 0 0 1.3-1.2l.7-10.3" /></S>,
-  close: (p: P) => <S {...p}><path d="m5.5 5.5 9 9M14.5 5.5l-9 9" /></S>,
-  chevron: (p: P) => <S {...p}><path d="m7.5 4.5 5.5 5.5-5.5 5.5" /></S>,
-  back: (p: P) => <S {...p}><path d="M12.5 4.5 7 10l5.5 5.5" /></S>,
+  close: sh('close'),
+  chevron: sh('chevron'),
+  back: sh('chevronLeft'),
   grip: (p: P) => <S {...p} sw={0}>{[6, 10, 14].flatMap((y) => [7.5, 12.5].map((x) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.25" fill="currentColor" />))}</S>,
-  plus: (p: P) => <S {...p}><path d="M10 4v12M4 10h12" /></S>,
-  check: (p: P) => <S {...p} sw={2}><path d="m4.5 10.5 3.5 3.5 7.5-8" /></S>,
+  plus: sh('plus'),
+  check: sh('check', 2),
   more: (p: P) => <S {...p} sw={0}><circle cx="4.5" cy="10" r="1.5" fill="currentColor" /><circle cx="10" cy="10" r="1.5" fill="currentColor" /><circle cx="15.5" cy="10" r="1.5" fill="currentColor" /></S>,
   external: (p: P) => <S {...p}><path d="M11 3.5h5.5V9M16.3 3.7 9 11M14 12v3a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 15V7.5A1.5 1.5 0 0 1 5 6h3" /></S>,
   sidebar: (p: P) => <S {...p}><rect x="2.5" y="3.5" width="15" height="13" rx="2.4" /><path d="M12.5 3.8v12.4" /></S>,
@@ -41,11 +49,13 @@ export const I = {
   save: (p: P) => <S {...p}><path d="M4.8 3h8.4L17 6.8v8.4a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 15.2V4.8A1.8 1.8 0 0 1 4.8 3Z" /><path d="M6.5 3v4h6V3M6.5 17v-5h7v5" /></S>,
   keyboard: (p: P) => <S {...p}><rect x="2.5" y="5" width="15" height="10" rx="2" /><path d="M5.5 8h.01M8.5 8h.01M11.5 8h.01M14.5 8h.01M6.5 12h7" /></S>,
   collapse: (p: P) => <S {...p}><path d="m6 4 4 3.5L14 4M6 16l4-3.5 4 3.5" /></S>,
-  calendar: (p: P) => <S {...p}><rect x="3" y="4" width="14" height="13" rx="2.4" /><path d="M3 8h14M7 2.5v3M13 2.5v3" /></S>,
-  search: (p: P) => <S {...p}><circle cx="8.8" cy="8.8" r="5.3" /><path d="m12.8 12.8 3.7 3.7" /></S>,
-  warn: (p: P) => <S {...p}><path d="M10 3.2 2.8 16h14.4L10 3.2Z" /><path d="M10 8.2v3.6M10 14h.01" /></S>,
+  calendar: sh('calendar'),
+  search: sh('search'),
+  warn: sh('warn'),
   refresh: (p: P) => <S {...p}><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3.2h-3.2" /></S>,
-  mail: (p: P) => <S {...p}><rect x="2.5" y="4.5" width="15" height="11" rx="2.2" /><path d="m3 5.5 7 5.5 7-5.5" /></S>,
+  mail: sh('mail'),
+  lock: sh('lock'),
+  link2: sh('globe'),
 };
 
 export const BLOCK_META: Record<BlockType, { icon: (p: P) => React.ReactElement; tint: string; desc: string }> = {
