@@ -51,6 +51,7 @@ Data (database, uploads, encryption key) lives in `./data`. **Back up that folde
 | `APP_SECRET` | Encrypts API keys and signs sessions. If empty, one is generated into `DATA_DIR/secret.key`. |
 | `CRON_KEY` | Lets an external scheduler call `/api/cron?key=…` every minute (for hosts that sleep). |
 | `DISABLE_SCHEDULER=1` | Turns off the built-in every-minute scheduler (use with `CRON_KEY`). |
+| `ALLOW_PRIVATE_FETCH=1` | Lets news sources and “Add story by URL” read addresses on your own network (blocked by default for safety). Only for testing. |
 
 **Where to host:** anything that runs a long-lived Node process with a disk, e.g. a small VPS (DigitalOcean, Lightsail, Hetzner), Railway, Render or Fly.io with a volume. Put it on a sub-domain such as `brief.unada.io`. Serverless hosts (Vercel) need a persistent database and `CRON_KEY`; they are not the default here.
 
