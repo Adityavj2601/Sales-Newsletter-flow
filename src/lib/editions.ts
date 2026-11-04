@@ -69,7 +69,7 @@ export function saveContent(id: string, content: EditionContent, opts: { author?
 export type DraftInput = { storyIds?: string[]; kbIds?: string[]; brief?: string; plannedFor?: string };
 
 export function pickStories(productId: string, ids?: string[]) {
-  if (ids) return ids.length ? all(`SELECT * FROM stories WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids) : [];
+  if (ids) return ids.length ? all(`SELECT * FROM stories WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY score DESC`, ...ids) : [];
   const shortlisted = all("SELECT * FROM stories WHERE product_id = ? AND status = 'shortlisted' ORDER BY score DESC LIMIT 6", productId);
   if (shortlisted.length >= 3) return shortlisted;
   const fresh = all("SELECT * FROM stories WHERE product_id = ? AND status IN ('new','shortlisted') AND created_at >= ? ORDER BY score DESC LIMIT 6", productId, new Date(Date.now() - 10 * 86400_000).toISOString());

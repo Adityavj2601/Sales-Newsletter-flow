@@ -143,9 +143,10 @@ const normUrl = (u: string) => {
 /** Add one story by URL (manual). Re-adding a story that's already in the pool just shortlists it. */
 export async function addStoryByUrl(productId: string, url: string) {
   const clean = normUrl(url.trim());
-  const bare = clean.replace(/[?#].*$/, '');
-  const dupe = get('SELECT id FROM stories WHERE product_id = ? AND (url = ? OR url = ? OR url LIKE ?)', productId, clean, bare, `${bare}?%`);
-  if (dupe) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ? AND status <> 'used'", dupe.id); return dupe.id as string; }
+  const bare = clean.replace(/[?#].*$/, '').replace(/\/$/, '');
+  // Compare normalised URLs on both sides (trailing slash, query string) without LIKE wildcards.
+  const dupe = get("SELECT id FROM stories WHERE product_id = ? AND (rtrim(url, '/') IN (?, ?) OR substr(url, 1, ?) IN (?, ?))", productId, clean.replace(/\/$/, ''), bare, bare.length + 1, `${bare}?`, `${bare}/`);
+  if (dupe) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ? AND status <> 'used'", dupe.id); throw new Error('That story is already in the pool. It’s on your shortlist now.'); }
   const res = await fetchText(clean, 12000);
   if (res.status >= 400) throw new Error(`Could not open that page (HTTP ${res.status}).`);
   const finalUrl = normUrl(res.finalUrl);
@@ -154,7 +155,7 @@ export async function addStoryByUrl(productId: string, url: string) {
   const content = readableText(res.text, 6000);
   const hash = sha1(finalUrl.replace(/[?#].*$/, '') + '|' + title.toLowerCase().slice(0, 80));
   const existing = get('SELECT id FROM stories WHERE product_id = ? AND (url_hash = ? OR url = ? OR lower(title) = lower(?))', productId, hash, finalUrl, title);
-  if (existing) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ? AND status <> 'used'", existing.id); return existing.id as string; }
+  if (existing) { run("UPDATE stories SET status = 'shortlisted' WHERE id = ? AND status <> 'used'", existing.id); throw new Error('That story is already in the pool. It’s on your shortlist now.'); }
   const id = uid('st_');
   const h = heuristicScore(title, summary);
   const host = new URL(finalUrl).hostname.replace(/^www\./, '');

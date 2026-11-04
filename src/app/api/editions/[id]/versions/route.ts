@@ -7,5 +7,5 @@ export const POST = api<{ id: string }>(async ({ params, body, user }) => {
   const v = get('SELECT * FROM edition_versions WHERE id = ? AND edition_id = ?', body.versionId, params.id);
   if (!v) throw new Error('Version not found');
   const e = saveContent(params.id, JSON.parse(v.content), { author: user.name, note: `Restored version from ${v.created_at.slice(0, 16).replace('T', ' ')}`, version: true });
-  return { content: e.content, status: e.status };
+  return { content: e.content, status: e.status, updated_at: e.updated_at };
 });

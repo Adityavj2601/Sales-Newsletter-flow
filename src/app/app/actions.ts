@@ -266,7 +266,7 @@ export async function deleteEdition(id: string) {
   await requireUser();
   const e = get('SELECT status FROM editions WHERE id = ?', id);
   if (e?.status === 'sent' || e?.status === 'sending') back('/app/editions', 'Sent editions are kept for your records and analytics.');
-  run("UPDATE stories SET status = 'new', used_in = NULL WHERE used_in = ?", id);
+  run("UPDATE stories SET status = 'shortlisted', used_in = NULL WHERE used_in = ?", id);
   run('DELETE FROM editions WHERE id = ?', id);
   back('/app/editions', 'Edition deleted.');
 }

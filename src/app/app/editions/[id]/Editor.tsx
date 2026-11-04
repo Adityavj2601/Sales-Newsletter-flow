@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BLOCK_LABELS, CTA_LABELS, MATURITY, PILLARS, newBlock, type Block, type BlockType, type EditionContent, type CheckResult, type ChecksRun, type Source, type CtaAction, type Maturity, type Pillar } from '@/lib/types';
+import { BLOCK_LABELS, CTA_LABELS, MATURITY, PILLARS, newBlock, ovKey, type Block, type BlockType, type EditionContent, type CheckResult, type ChecksRun, type Source, type CtaAction, type Maturity, type Pillar } from '@/lib/types';
 import { Confirm } from '@/components/ui';
 
 type KB = { id: string; title: string; summary: string; problem: string; result: string; pillar: Pillar; status: Maturity; media_url: string | null; client_name: string | null; client_permission: number };
@@ -78,6 +78,8 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   latest.current = c;
   const saveRef = useRef(save);
   saveRef.current = save;
+  const plannedRef = useRef(planned);
+  plannedRef.current = planned;
   const [checkedAt, setCheckedAt] = useState(edition.checks?.at || '');
   const [editedAt, setEditedAt] = useState(edition.updated_at);
   const stale = !!checks && editedAt > checkedAt;
@@ -111,7 +113,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   // Never lose the last keystrokes: flush pending changes when leaving the editor inside the app.
   useEffect(() => () => {
     if ((saveRef.current === 'dirty' || saveRef.current === 'saving') && !locked) {
-      fetch(`/api/editions/${edition.id}`, { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: latest.current }) }).catch(() => null);
+      fetch(`/api/editions/${edition.id}`, { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: latest.current, ...(dirtyPlanned.current ? { plannedFor: plannedRef.current } : {}) }) }).catch(() => null);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function go(href: string) {
@@ -175,8 +177,8 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     } catch (e: any) { setNote({ kind: 'bad', text: e.message }); }
     setChecking(false);
   }
-  const blocking = useMemo(() => (checks ? checks.results.filter((r) => r.status === 'fail' && r.blocking && !overrides[r.id]) : []), [checks, overrides]);
-  const flagged = useMemo(() => new Set((checks?.results || []).filter((r) => r.status === 'fail' && r.blockId && !overrides[r.id]).map((r) => r.blockId!)), [checks, overrides]);
+  const blocking = useMemo(() => (checks ? checks.results.filter((r) => r.status === 'fail' && r.blocking && !overrides[ovKey(r)]) : []), [checks, overrides]);
+  const flagged = useMemo(() => new Set((checks?.results || []).filter((r) => r.status === 'fail' && r.blockId && !overrides[ovKey(r)]).map((r) => r.blockId!)), [checks, overrides]);
   async function setStatusAction(action: 'approve' | 'unapprove') {
     if (save !== 'saved') await doSave(c);
     if (action === 'approve') { setChecking(true); setNote({ kind: '', text: stale || !checks ? 'Re-checking the latest version before approving…' : 'Approving…' }); }
@@ -231,6 +233,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   /* ---------- subjects ---------- */
   const [subs, setSubs] = useState<{ subjects: string[]; waHooks: string[] } | null>(null);
   async function suggest() {
+    if (saveRef.current !== 'saved') await doSave(latest.current);
     const r = await fetch(`/api/editions/${edition.id}/subjects`, { method: 'POST' });
     const j = await r.json();
     if (r.ok) setSubs(j); else setNote({ kind: 'bad', text: j.error });
@@ -247,6 +250,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     setC(j.content);
     setStatus(j.status);
     setSave('saved');
+    if (j.updated_at) setEditedAt(j.updated_at);
     setNote({ kind: 'ok', text: 'Version restored.' });
   }
 
@@ -366,7 +370,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
           <div className="card tight" style={{ display: 'grid', gap: 10 }}>
             <div className="tabs" style={{ marginBottom: 0 }}>
               <button type="button" aria-pressed={tab === 'ai'} onClick={() => setTab('ai')}>AI copilot</button>
-              <button type="button" aria-pressed={tab === 'checks'} onClick={() => setTab('checks')}>Checks {checks ? `(${checks.results.filter((r) => r.status === 'fail' && !overrides[r.id]).length})` : ''}</button>
+              <button type="button" aria-pressed={tab === 'checks'} onClick={() => setTab('checks')}>Checks {checks ? `(${checks.results.filter((r) => r.status === 'fail' && !overrides[ovKey(r)]).length})` : ''}</button>
               <button type="button" aria-pressed={tab === 'versions'} onClick={() => setTab('versions')}>History</button>
             </div>
 
@@ -406,7 +410,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                   <>
                     {stale && <div className="notice warn">You’ve edited since these results. Run the checks again (Approve does it for you).</div>}
                     {blocking.length > 0 ? <div className="notice bad">{blocking.length} blocking check(s). Approval stays locked until they pass or you override them with a reason.</div> : <div className="notice ok">No blocking issues. You can approve.</div>}
-                    <ul className="cl">{checks.results.map((r) => <CheckRow key={r.id} r={r} overridden={overrides[r.id]} onOpen={() => { if (r.blockId) { setOpen(r.blockId); document.getElementById(`blk-${r.blockId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }} onOverride={(reason) => override(r.id, reason)} locked={locked} />)}</ul>
+                    <ul className="cl">{checks.results.map((r) => <CheckRow key={r.id} r={r} overridden={overrides[ovKey(r)]} onOpen={() => { if (r.blockId) { setOpen(r.blockId); document.getElementById(`blk-${r.blockId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }} onOverride={(reason) => override(r.id, reason)} locked={locked} />)}</ul>
                   </>
                 ) : <div className="hint">Checks cover sources, wording vs. maturity status, banned and spam words, preview lengths, email size, links, and an AI fact-check by a second model.</div>}
               </div>

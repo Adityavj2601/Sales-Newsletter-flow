@@ -5,11 +5,14 @@ import { newBlock, PILLARS, MATURITY, type EditionContent, type Block } from '..
 type StoryIn = { id: string; title: string; summary: string; publisher: string; url: string; published_at: string | null };
 type KbIn = { id: string; pillar: string; status: string; title: string; summary: string; problem: string | null; result: string | null };
 
+const SUFFIX = '(?:s|es|ed|ing|ion|ions|ory|or|ors|er|ers|ive|al)?';
+// Stems may take common endings; short words that collide with others (repo/report, emi/premium) must match exactly.
+const kw = (stems: string, exact = '') => new RegExp(`\\b(?:(?:${stems})${SUFFIX}${exact ? `|${exact}` : ''})\\b`, 'i');
 const KEYWORDS: [RegExp, number][] = [
-  [/\b(?:housing|residential|homes?|apartment|flat)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 18], [/\b(?:developer|builder|launch)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 16], [/\b(?:rera|regulat|compliance|order)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 14],
-  [/\b(?:sales|demand|absorption|inventory|unsold)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 16], [/\b(?:price|rate|repo|loan|emi)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 10], [/\b(?:marketing|lead|digital|campaign|portal|crm)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 14],
-  [/\b(?:india|mumbai|pune|bengaluru|bangalore|hyderabad|delhi|ncr|gurugram|noida|chennai|kolkata|ahmedabad)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 10],
-  [/\b(?:anarock|knight frank|propequity|jll|cbre|colliers|proptiger)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 12], [/\b(?:nri|luxury|premium)(?:s|es|ed|ing|ion|ions|ory|ers?)?\b/i, 6],
+  [kw('housing|residential|homes?|homebuyers?|apartment|flat'), 18], [kw('developer|builder|launch'), 16], [kw('rera|regulat|compliance|order'), 14],
+  [kw('sales|demand|absorption|inventory|unsold'), 16], [kw('price|pricing|rate|loan', 'repo|emis?'), 10], [kw('marketing|lead|digital|campaign|portal|crm'), 14],
+  [kw('india|mumbai|pune|bengaluru|bangalore|hyderabad|delhi|ncr|gurugram|noida|chennai|kolkata|ahmedabad'), 10],
+  [kw('anarock|knight frank|propequity|jll|cbre|colliers|proptiger'), 12], [kw('nri|luxury|premium'), 6],
 ];
 export function heuristicScore(title: string, summary = ''): { score: number; reason: string } {
   const text = `${title} ${summary}`;
@@ -58,7 +61,7 @@ export function demoDraft(p: Product, stories: StoryIn[], kb: KbIn[], editionNo:
   poll.options = ['Yes, already', 'Exploring it', 'Not yet'];
   blocks.push(poll, newBlock('cta'));
   const lead = s[0];
-  const title = clip(lead ? lead.title.replace(/\s+-\s+[^-]+$/, '') : `${p.newsletter_name} #${editionNo}`, 60);
+  const title = clip(lead ? lead.title : `${p.newsletter_name} #${editionNo}`, 60);
   return {
     kicker: 'This week',
     title,

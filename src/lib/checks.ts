@@ -1,7 +1,7 @@
 import { get, update, now } from './db';
 import { getEdition } from './editions';
 import { getProduct } from './settings';
-import { MATURITY, type CheckResult, type ChecksRun, type Block } from './types';
+import { MATURITY, ovKey, type CheckResult, type ChecksRun, type Block } from './types';
 import { runJSON, routeFor } from './ai/providers';
 import { factcheckSystem } from './ai/prompts';
 import { fetchText } from './web';
@@ -50,7 +50,10 @@ export async function runChecks(editionId: string, deep = true): Promise<ChecksR
       (b.type === 'chart' && b.data.length < 2) ||
       (b.type === 'poll' && (!b.question.trim() || b.options.filter(Boolean).length < 2)) ||
       ((b.type === 'video' || b.type === 'image') && !b.url.trim()) ||
-      (b.type === 'cta' && !b.actions.length);
+      (b.type === 'cta' && !b.actions.length) ||
+      (b.type === 'quote' && !b.text.trim()) ||
+      (b.type === 'text' && !b.heading.trim() && !b.body.trim()) ||
+      (b.type === 'showcase' && !b.placeholder && (!b.title.trim() || !b.body.trim()));
     if (empty) add({ id: `empty-${b.id}`, label: `Unfinished ${b.type} block`, status: 'fail', blocking: true, blockId: b.id, detail: 'Fill it in or delete it.' });
   }
 
@@ -94,7 +97,7 @@ export async function runChecks(editionId: string, deep = true): Promise<ChecksR
 
   // Brand / spam words
   // Only text readers see; source titles and URLs are other people's words.
-  const readerText = [c.kicker, c.title, c.dek, c.subject, c.preheader, c.waText, c.preview.title, c.preview.description, ...blocks.map((b: any) => [b.heading, b.bullets, b.value, b.caption, b.headline, b.body, b.why, b.title, b.insight, b.text, b.question, b.options, b.cta, b.alt].flat().filter(Boolean).join(' '))].join(' ').toLowerCase();
+  const readerText = [c.kicker, c.title, c.dek, c.subject, c.preheader, c.waText, c.preview.title, c.preview.description, ...blocks.map((b: any) => [b.heading, b.bullets, b.value, b.caption, b.headline, b.body, b.why, b.title, b.insight, b.text, b.author, b.question, b.options, b.cta, b.alt, (b.data || []).map((d: any) => d.label)].flat().filter(Boolean).join(' '))].join(' ').toLowerCase();
   const bw = banned.filter((w) => new RegExp(`(?<![\\w])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`).test(readerText));
   add({ id: 'banned', label: bw.length ? `Banned words used: ${bw.join(', ')}` : 'No banned words', status: bw.length ? 'fail' : 'ok', blocking: bw.length > 0 });
   const subj = `${c.subject} ${c.preheader}`.toLowerCase();
@@ -167,5 +170,5 @@ export async function runChecks(editionId: string, deep = true): Promise<ChecksR
 
 export function blockingFailures(run: ChecksRun | null, overrides: Record<string, string>) {
   if (!run) return [{ id: 'not-run', label: 'Checks have not been run', status: 'fail' as const, blocking: true }];
-  return run.results.filter((r) => r.status === 'fail' && r.blocking && !overrides[r.id]);
+  return run.results.filter((r) => r.status === 'fail' && r.blocking && !overrides[ovKey(r)]);
 }

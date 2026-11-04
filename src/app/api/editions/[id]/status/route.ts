@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import { getEdition, snapshot } from '@/lib/editions';
 import { blockingFailures, runChecks } from '@/lib/checks';
+import { ovKey } from '@/lib/types';
 import { update, now } from '@/lib/db';
 
 export const POST = api<{ id: string }>(async ({ params, body, user }) => {
@@ -10,10 +11,12 @@ export const POST = api<{ id: string }>(async ({ params, body, user }) => {
     if (e.status === 'sent' || e.status === 'sending') throw new Error('This edition was already sent.');
     const reason = String(body.reason || '').trim();
     if (reason && reason.length < 5) throw new Error('Give a short reason (at least 5 characters).');
-    if (reason && !e.checks?.results.some((r) => r.id === body.checkId && r.status === 'fail')) throw new Error('That check isn’t failing any more. Run the checks again.');
+    const target = e.checks?.results.find((r) => (r.id === body.checkId || ovKey(r) === body.checkId) && r.status === 'fail');
+    if (reason && !target) throw new Error('That check isn’t failing any more. Run the checks again.');
     const o = { ...e.overrides };
-    if (reason) o[body.checkId] = `${reason} (${user.name}, ${now().slice(0, 10)})`;
-    else delete o[body.checkId];
+    const key = target ? ovKey(target) : String(body.checkId);
+    if (reason) o[key] = `${reason} (${user.name}, ${now().slice(0, 10)})`;
+    else delete o[key];
     update('editions', e.id, { overrides: JSON.stringify(o) });
     return { overrides: o };
   }

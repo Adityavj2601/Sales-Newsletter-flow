@@ -26,7 +26,7 @@ export default async function StudioLayout({ children }: { children: React.React
   const g = getSetting('general');
   return (
     <div className="shell">
-      <a className="skip" href="#main">Skip to content</a>
+      <a className="skip-link" href="#main">Skip to content</a>
       <aside className="side" id="sidebar" aria-label="Sidebar">
         <div className="brand"><span className="brand-mark">B</span>{g.appName}<MenuClose /></div>
         {p && <ProductSwitch products={products} current={p.id} action={switchProduct} />}

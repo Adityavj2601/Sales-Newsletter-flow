@@ -37,6 +37,8 @@ export type EditionContent = {
 
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip';
 export type CheckResult = { id: string; label: string; status: CheckStatus; detail?: string; blocking?: boolean; blockId?: string };
+/** Overrides are tied to the exact failure they excuse: if the failure text changes, the override no longer applies. */
+export const ovKey = (r: { id: string; label: string; detail?: string }) => `${r.id}|${r.label}|${r.detail || ''}`;
 export type ChecksRun = { at: string; results: CheckResult[]; factcheck?: { provider: string; model: string } | null };
 
 export const PILLARS: Record<Pillar, { label: string; defaultStatus: Maturity; cta: string; hint: string }> = {
