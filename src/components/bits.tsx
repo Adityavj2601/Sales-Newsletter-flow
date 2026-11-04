@@ -11,7 +11,7 @@ export function MaturityPill({ status }: { status: string }) {
   return <span className={`pill ${MAT[status] || ''}`}>{status[0].toUpperCase() + status.slice(1)}</span>;
 }
 const STAGES: Record<string, string> = { new: '', warm: 'warn', contacted: 'info', meeting: 'info', won: 'ok', lost: 'bad', not_interested: 'bad' };
-export const STAGE_LABEL: Record<string, string> = { new: 'New', warm: 'Warm', contacted: 'Contacted', meeting: 'Meeting booked', won: 'Won', lost: 'Lost', not_interested: 'Not interested' };
+export const STAGE_LABEL: Record<string, string> = { new: 'New', warm: 'Warm', contacted: 'Contacted', meeting: 'Meeting booked', won: 'Won', lost: 'Lost', not_interested: 'Lost' };
 export function StagePill({ stage }: { stage: string }) {
   return <span className={`pill ${STAGES[stage] || ''}`}>{STAGE_LABEL[stage] || stage}</span>;
 }
