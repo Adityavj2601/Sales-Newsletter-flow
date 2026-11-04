@@ -294,6 +294,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .seg button { border: 0; background: transparent; padding: 5px 13px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 13px; color: var(--ink); transition: background var(--t2) var(--ease), box-shadow var(--t2) var(--ease); }
 .seg button[aria-pressed="true"] { background: var(--seg-on); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04); }
 
+/* Count badges inside a selected segment stay neutral (no blue on --seg-on). */
+.tabs :is(a[aria-current="page"], button[aria-pressed="true"]) :is(.pill, .badge, .count, .n, .seg-n),
+.seg button[aria-pressed="true"] :is(.pill, .badge, .count, .n, .seg-n) { background: var(--fill); color: var(--ink); }
+
 /* ---------- Lists: checks, timeline, steps, bars ---------- */
 .cl { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .cl li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; }
