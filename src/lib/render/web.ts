@@ -49,7 +49,7 @@ body{background:linear-gradient(var(--ink),var(--ink)) 0 0/100% 300px no-repeat,
 .prog{position:absolute;left:0;right:0;bottom:0;height:2px;pointer-events:none;overflow:hidden}
 .prog i{display:block;height:100%;background:var(--acc-on-ink);transform-origin:0 50%;transform:scaleX(0);will-change:transform}
 /* Hero */
-.hero{position:relative;color:var(--on-ink);background:radial-gradient(680px 460px at min(100%,calc(50% + 400px)) 10%,var(--acc-glow),transparent 72%),radial-gradient(520px 420px at 0% 55%,var(--ink-hi),transparent 70%),var(--ink);padding:40px 0 68px;overflow:hidden}
+.hero{position:relative;color:var(--on-ink);background:radial-gradient(720px 480px at 0% 40%,var(--ink-hi),transparent 70%),var(--ink);padding:40px 0 68px;overflow:hidden}
 .hero-in{max-width:760px;margin:0 auto;padding:0 max(20px,env(safe-area-inset-left))}
 .hero-in>*{animation:rise .9s var(--ease) both}
 .hero-in>:nth-child(2){animation-delay:.06s}.hero-in>:nth-child(3){animation-delay:.12s}.hero-in>:nth-child(4){animation-delay:.18s}
@@ -161,7 +161,7 @@ blockquote+cite{display:block;margin-top:14px;color:var(--muted);font-style:norm
 .note[hidden]{display:none}
 .note .i{width:18px;height:18px}
 /* Call to action */
-.cta-card{position:relative;overflow:hidden;color:var(--on-ink);background:radial-gradient(110% 80% at 100% 0%,var(--acc-glow),transparent 60%),radial-gradient(80% 70% at 0% 100%,var(--ink-hi),transparent 70%),var(--ink);border-radius:28px;padding:30px 20px 18px}
+.cta-card{position:relative;overflow:hidden;color:var(--on-ink);background:radial-gradient(90% 80% at 0% 100%,var(--ink-hi),transparent 70%),var(--ink);border-radius:28px;padding:30px 20px 18px}
 .cta-card .lbl{color:var(--acc-on-ink)}
 .cta-card h2{color:var(--on-ink);font-size:clamp(30px,8vw,40px);margin-bottom:10px}
 .cta-card p{color:var(--on-ink-2);font-size:17px}
@@ -307,7 +307,7 @@ ${FONTS}
 </head><body>
 ${ctx.preview ? '<div class="pv">Preview. Taps here are not recorded.</div>' : ''}
 <header class="nav" id="nav"><div class="nav-in"><a class="logo" href="${ctx.base}/e/${p.slug}" aria-label="${esc(p.newsletter_name)}: past editions">${logo}</a><div class="nav-mid"><span class="nav-nl">${esc(p.newsletter_name)}</span><span class="nav-t" aria-hidden="true">${esc(c.title)}</span></div><a class="nav-sh" data-act="share" href="#share" aria-label="Share this edition">${svg(I.share)}</a></div><div class="prog" aria-hidden="true"><i id="prog"></i></div></header>
-<section class="hero"><div class="hero-in">${c.kicker ? `<span class="kicker">${esc(c.kicker)}</span>` : ''}<h1 id="ttl">${esc(c.title)}</h1>${c.dek ? `<p class="dek">${esc(c.dek)}</p>` : ''}<div class="by"><span class="chip">${svg(I.clock)}${c.readMinutes} min read</span>${ctx.firstName ? `<span class="chip">${svg(I.user)}Prepared for ${esc(ctx.firstName)}</span>` : ''}<span>Edition ${String(e.number).padStart(2, '0')} · ${esc(date)}</span></div></div></section>
+<section class="hero"><div class="hero-in">${c.kicker ? `<span class="kicker">${esc(c.kicker)}</span>` : ''}<h1 id="ttl">${esc(c.title)}</h1>${c.dek ? `<p class="dek">${esc(c.dek)}</p>` : ''}<div class="by"><span class="chip">${svg(I.clock)}${c.readMinutes} min read</span>${ctx.firstName ? `<span class="chip">${svg(I.user)}Prepared for ${esc(ctx.firstName)}</span>` : ''}<span>Edition ${String(e.number)} · ${esc(date)}</span></div></div></section>
 <main class="sheet">
 ${parts.join('\n')}
 ${srcs.length ? `<section class="sec sources rv"><span class="lbl">Sources</span><ol>${srcs.map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a>${s.publisher ? ` · ${esc(s.publisher)}` : ''}${s.date ? ` · ${esc(s.date)}` : ''}</li>`).join('')}</ol></section>` : ''}

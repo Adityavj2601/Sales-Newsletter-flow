@@ -57,7 +57,7 @@ export const MATURITY: Record<Maturity, { label: string; allowed: string; banned
 };
 
 export const CTA_LABELS: Record<CtaAction, string> = {
-  interested: "I'm interested",
+  interested: 'I’m interested',
   book: 'Book 15 min',
   more: 'Send me more on this',
   share: 'Share with a colleague',
