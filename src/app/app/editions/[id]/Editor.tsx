@@ -6,6 +6,7 @@ import { BLOCK_LABELS, CTA_LABELS, MATURITY, PILLARS, newBlock, ovKey, type Bloc
 import { Confirm } from '@/components/ui';
 import { I, BlockIcon, BLOCK_META } from '@/components/editor/icons';
 import { Segmented, Popover, PreviewFrame, ScaledPreview, Ring, useFlip, useMod, Kbd, reducedMotion } from '@/components/editor/kit';
+import { edNo, fmtDay, fmtTime, todayIn } from '@/lib/format';
 
 type KB = { id: string; title: string; summary: string; problem: string; result: string; pillar: Pillar; status: Maturity; media_url: string | null; client_name: string | null; client_permission: number };
 type Story = { id: string; title: string; url: string; publisher: string; published_at: string | null };
@@ -19,7 +20,11 @@ const VIEWS = [{ value: 'phone' as const, label: 'Phone' }, { value: 'web' as co
 const WIDE = '(min-width: 1400px)';
 const STACK = '(max-width: 999px)';
 const rid = () => Math.random().toString(36).slice(2, 9);
-const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+/** "9:01 pm" today, otherwise "Wed, 4 Nov · 9:01 pm" — the app-wide time format. */
+const when = (iso: string) => (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIn() ? fmtTime(iso) : `${fmtDay(iso)} · ${fmtTime(iso)}`);
+/* The web preview carries a "Preview" strip; inside the editor's device frames it should read as quiet chrome, not a warning. */
+const CALM_STRIP = '<style>.pv{background:#f2f2f7!important;color:#6e6e73!important;font-size:12px!important;font-weight:500!important;padding:7px 16px!important;letter-spacing:0}@media (prefers-color-scheme:dark){.pv{background:#1c1c1e!important;color:#98989d!important}}</style>';
+const calm = (html: string) => (html.includes('</head>') ? html.replace('</head>', `${CALM_STRIP}</head>`) : html);
 function rel(iso: string) {
   const s = (Date.now() - +new Date(iso)) / 1000;
   if (s < 60) return 'just now';
@@ -326,7 +331,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
       try {
         const r = await fetch(`/api/editions/${edition.id}/preview`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: c, view: v }) });
         if (v === 'wa') { const j = await r.json(); if (live) setWa(j); }
-        else { const h = await r.text(); if (live) setPv({ kind: v, html: h }); }
+        else { const h = await r.text(); if (live) setPv({ kind: v, html: v === 'web' ? calm(h) : h }); }
       } finally { if (live) setUpdating(false); }
     }, switched ? 60 : 500);
     return () => { live = false; clearTimeout(t); };
@@ -359,17 +364,31 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     const warns = rs.filter((r) => r.status === 'warn').length;
     return { total: counted.length, passed, fails, warns };
   }, [checks, overrides]);
+  /* Approve morphs into a check before the status pill cross-fades and Send becomes the next step. */
+  const [approving, setApproving] = useState(false);
+  const [morph, setMorph] = useState(false);
+  const unapproveRef = useRef<() => void>(() => {});
   async function setStatusAction(action: 'approve' | 'unapprove') {
-    if (save !== 'saved') await doSave(c);
-    if (action === 'approve') { setChecking(true); setNote({ kind: '', text: stale || !checks ? 'Re-checking the latest version before approving…' : 'Approving…' }); }
+    if (saveRef.current !== 'saved') await doSave(latest.current);
+    const recheck = action === 'approve' && (stale || !checks);
+    if (action === 'approve') setApproving(true);
+    if (recheck) setNote({ kind: '', text: 'Re-checking the latest version before approving…' });
     const r = await fetch(`/api/editions/${edition.id}/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) });
     const j = await r.json();
-    setChecking(false);
     if (j.checks) { setChecks(j.checks); setCheckedAt(j.checks.at); }
-    if (!r.ok) { setNote({ kind: 'bad', text: j.error }); reveal('checks', true); return; }
+    if (!r.ok) { setApproving(false); setNote({ kind: 'bad', text: j.error }); reveal('checks', true); return; }
+    if (action === 'approve' && !reducedMotion()) {
+      setMorph(true);
+      await new Promise((res) => setTimeout(res, 760));
+    }
+    setMorph(false);
+    setApproving(false);
     setStatus(j.status);
-    setNote({ kind: 'ok', text: action === 'approve' ? 'Approved. Next: choose who gets it and when, on the Send page.' : 'Back in review.' });
+    setNote(action === 'approve'
+      ? { kind: 'ok', text: 'Approved. Next: choose who gets it and when.', action: { label: 'Undo', run: () => unapproveRef.current() } }
+      : { kind: '', text: 'Back in review. Approve again when it’s ready.' });
   }
+  unapproveRef.current = () => { setStatusAction('unapprove'); };
   async function override(checkId: string, reason: string) {
     const r = await fetch(`/api/editions/${edition.id}/status`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'override', checkId, reason }) });
     const j = await r.json();
@@ -454,7 +473,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
   /* ---------- keyboard shortcuts: ⌘S version · ⌘↵ copilot · ⌘. collapse ---------- */
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && drawer && !document.querySelector('.pop')) { setDrawer(false); return; }
+    if (e.key === 'Escape' && drawer && !document.querySelector('.ed-pop')) { setDrawer(false); return; }
     if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === 's') { e.preventDefault(); saveVersion(); }
@@ -488,8 +507,6 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     tiles[Math.max(0, Math.min(tiles.length - 1, i + d))]?.focus();
   };
 
-  const [cls, lbl] = STATUS_LABEL[status] || ['', status];
-  const nn = String(edition.number).padStart(2, '0');
   const sendHref = `/app/editions/${edition.id}/${locked ? 'analytics' : 'distribute'}`;
   const approved = status === 'approved' || status === 'scheduled';
   const subjectFor = c.subject.replace('{first_name}', 'Rohan');
@@ -498,50 +515,107 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
     const all = [...(checks?.results || [])].sort((a, b) => rank(a) - rank(b));
     return { issues: all.filter((r) => rank(r) < 3), passed: all.filter((r) => rank(r) === 3) };
   }, [checks, overrides]);
-  const ringTone = tally.fails ? 'bad' : tally.warns ? 'warn' : 'ok';
+
+  /* ---------- the weekly state machine: Draft → Run checks → Approve → Send ---------- */
+  const phase: 'check' | 'checking' | 'fix' | 'approve' | 'send' | 'sent' =
+    locked ? 'sent' : approved && !morph ? 'send' : checking ? 'checking' : approving || morph ? 'approve' : !checks || stale ? 'check' : blocking.length ? 'fix' : 'approve';
+  const nBlock = blocking.length;
+  const approveWhy = phase === 'fix' ? `${nBlock} ${nBlock === 1 ? 'check blocks' : 'checks block'} approval` : 'Run the checks first. Approve unlocks when nothing blocks it.';
+  const sendWhy = 'Approve first to send to everyone. You can still send yourself a test.';
+
+  /* Keep the sticky panes clear of the toolbar, whatever its height (it wraps on narrow screens). */
+  const edRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const bar = barRef.current, ed = edRef.current;
+    if (!bar || !ed) return;
+    const set = () => {
+      ed.style.setProperty('--ed-top', `${Math.round((parseFloat(getComputedStyle(bar).top) || 0) + bar.offsetHeight + 14)}px`);
+      // Pane height from where the panes sit before scrolling, so the preview footer is never cut off at rest.
+      const shell = ed.querySelector<HTMLElement>('.ed-shell');
+      if (shell) ed.style.setProperty('--ed-rest', `${Math.round(shell.getBoundingClientRect().top + window.scrollY)}px`);
+    };
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(bar);
+    window.addEventListener('resize', set);
+    return () => { ro.disconnect(); window.removeEventListener('resize', set); };
+  }, []);
+
+  /* Glass hairline only once content scrolls under the toolbar. */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 4);
+    on();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
+
+  const [keysOpen, setKeysOpen] = useState(false);
+  const keysRef = useRef<HTMLButtonElement>(null);
+  const closeKeys = useCallback(() => setKeysOpen(false), []);
 
   return (
-    <div className="ed">
+    <div className="ed" ref={edRef}>
       {/* ---------- Toolbar ---------- */}
-      <div className="statusbar ed-bar">
+      <div className={`statusbar ed-bar ${scrolled ? 'scrolled' : ''}`} ref={barRef}>
         <div className="tb-l">
-          <a href="/app/editions" className="tb-back" onClick={(e) => { e.preventDefault(); go('/app/editions'); }} aria-label="Back to editions"><I.back size={16} /><span>Editions</span></a>
+          <a href="/app/editions" className="tb-back" onClick={(e) => { e.preventDefault(); go('/app/editions'); }} aria-label="Back to editions"><I.back size={17} /><span>Editions</span></a>
           <span className="tb-sep" aria-hidden />
-          <span className="tb-num">#{nn}</span>
+          <span className="tb-num tnum">{edNo(edition.number)}</span>
           <h1 title={c.title}>{c.title || 'Untitled edition'}</h1>
-          <span className={`pill ${cls} tb-status`} key={status}><span className="dot" />{lbl}</span>
-          <SaveState save={save} onRetry={() => doSave(latest.current)} />
+          <StatusSwap status={status} />
+          {!locked && <SaveState save={save} onRetry={() => doSave(latest.current)} />}
         </div>
         <div className="tb-r">
-          <button type="button" className={`icon-btn tb-insp ${inspVisible ? 'on' : ''}`} onClick={toggleInspector} aria-pressed={inspVisible} title={inspVisible ? 'Hide inspector' : 'Show inspector'} aria-label="Inspector">
-            <I.sidebar />{tally.fails > 0 && <span className="badge-dot" aria-hidden />}
-          </button>
-          <a className="icon-btn" href={`${publicUrl}?preview=1`} target="_blank" rel="noreferrer" title="Open the reader page in a new tab" aria-label="Open reader page"><I.external /></a>
-          <span className="pop-anchor">
-            <button ref={moreRef} type="button" className="icon-btn" aria-haspopup="menu" aria-expanded={menu} title="More actions" aria-label="More actions" onClick={() => setMenu((m) => !m)}><I.more /></button>
-            <Popover open={menu} onClose={closeMenu} anchor={moreRef} label="More actions" align="end" className="menu" role="menu">
-              {!locked && <button type="button" role="menuitem" onClick={() => { setMenu(false); saveVersion(); }}><I.save size={16} /><span>Save a version</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>S</Kbd></span></button>}
-              <button type="button" role="menuitem" onClick={() => { setMenu(false); setOpen(null); }}><I.collapse size={16} /><span>Collapse all blocks</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>.</Kbd></span></button>
-              {!locked && <button type="button" role="menuitem" onClick={() => { setMenu(false); reveal('ai', true); setTimeout(() => inputRef.current?.focus(), 80); }}><I.sparkle size={16} /><span>Ask the copilot</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>↵</Kbd></span></button>}
-              <a role="menuitem" href={`${publicUrl}?preview=1`} target="_blank" rel="noreferrer" onClick={() => setMenu(false)}><I.external size={16} /><span>Open reader page</span></a>
-              <form action={duplicateAction}><button type="submit" role="menuitem"><I.copy size={16} /><span>Duplicate edition</span></button></form>
-              {!locked && <><div className="menu-sep" /><div className="menu-danger"><Confirm action={deleteAction} label="Delete edition…" confirmLabel="Delete" /></div></>}
-            </Popover>
-          </span>
-          {!locked && <button type="button" className="btn" onClick={runChecks} disabled={checking}>{checking ? <><span className="spin" />Checking…</> : 'Run all checks'}</button>}
-          {!locked && (approved
-            ? <button type="button" className="btn" onClick={() => setStatusAction('unapprove')}>Unapprove</button>
-            : <button type="button" className="btn primary" onClick={() => setStatusAction('approve')} disabled={checking || (!stale && !!checks && blocking.length > 0)} title={stale || !checks ? 'Runs the checks on the latest version first' : blocking.length ? `${blocking.length} blocking check(s)` : ''}>{checking ? 'Checking…' : 'Approve'}</button>)}
-          <a className={`btn ${approved || locked ? 'primary' : ''}`} href={sendHref} onClick={(e) => { e.preventDefault(); go(sendHref); }}>{locked ? 'Results →' : 'Send →'}</a>
+          <div className="tb-tools">
+            <button type="button" className={`icon-btn tb-insp ${inspVisible ? 'on' : ''}`} onClick={toggleInspector} aria-pressed={inspVisible} title={inspVisible ? 'Hide inspector' : 'Show inspector'} aria-label="Inspector">
+              <I.sidebar />{tally.fails > 0 && <span className="badge-dot" aria-hidden />}
+            </button>
+            <a className="icon-btn tb-ext" href={`${publicUrl}?preview=1`} target="_blank" rel="noreferrer" title="Open the reader page in a new tab" aria-label="Open reader page"><I.external /></a>
+            <span className="pop-anchor">
+              <button ref={moreRef} type="button" className="icon-btn" aria-haspopup="menu" aria-expanded={menu} title="More actions" aria-label="More actions" onClick={() => setMenu((m) => !m)}><I.more /></button>
+              <Popover open={menu} onClose={closeMenu} anchor={moreRef} label="More actions" align="end" className="ed-menu" role="menu">
+                {!locked && <button type="button" role="menuitem" onClick={() => { setMenu(false); saveVersion(); }}><I.save size={16} /><span>Save a version</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>S</Kbd></span></button>}
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); setOpen(null); }}><I.collapse size={16} /><span>Collapse all blocks</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>.</Kbd></span></button>
+                {!locked && <button type="button" role="menuitem" onClick={() => { setMenu(false); reveal('ai', true); setTimeout(() => inputRef.current?.focus(), 80); }}><I.sparkle size={16} /><span>Ask the copilot</span><span className="mk"><Kbd>{mod}</Kbd><Kbd>↵</Kbd></span></button>}
+                {!locked && checks && !checking && <button type="button" role="menuitem" onClick={() => { setMenu(false); runChecks(); }}><I.refresh size={16} /><span>Run the checks again</span></button>}
+                <a role="menuitem" href={`${publicUrl}?preview=1`} target="_blank" rel="noreferrer" onClick={() => setMenu(false)}><I.external size={16} /><span>Open reader page</span></a>
+                <form action={duplicateAction}><button type="submit" role="menuitem"><I.copy size={16} /><span>Duplicate edition</span></button></form>
+                {!locked && approved && <><div className="menu-sep" /><button type="button" role="menuitem" onClick={() => { setMenu(false); setStatusAction('unapprove'); }}><I.back size={16} /><span>Unapprove (back to review)</span></button></>}
+                {!locked && <><div className="menu-sep" /><div className="menu-danger"><Confirm action={deleteAction} label="Delete edition…" confirmLabel="Delete" /></div></>}
+              </Popover>
+            </span>
+          </div>
+          <nav className={`ed-flow is-${phase}`} aria-label="Next step">
+            {/* 1 · checks */}
+            {phase === 'check' || phase === 'checking'
+              ? <button type="button" className="btn primary flow-now" onClick={runChecks} disabled={checking}>{checking ? <><span className="spin" />Checking…</> : <><I.shield size={15} />Run all checks</>}</button>
+              : phase === 'fix'
+                ? <button type="button" className="flow-st issue" onClick={() => reveal('checks', true)} title="Show what needs fixing"><span className="flow-n tnum">{nBlock}</span>{nBlock === 1 ? 'Issue to fix' : 'Issues to fix'}</button>
+                : <span className="flow-st done" title={checks ? `Checked ${when(checks.at)}` : undefined}><I.check size={13} />Checked</span>}
+            <I.chevron size={12} className="flow-sep" />
+            {/* 2 · approve */}
+            {phase === 'approve'
+              ? <MorphButton morph={morph} busy={approving} onClick={() => setStatusAction('approve')}>Approve</MorphButton>
+              : phase === 'send' || phase === 'sent'
+                ? <span className="flow-st done"><I.check size={13} />Approved</span>
+                : <button type="button" className="flow-st" aria-disabled="true" title={approveWhy} onClick={() => setNote({ kind: 'warn', text: approveWhy })}>Approve</button>}
+            <I.chevron size={12} className="flow-sep" />
+            {/* 3 · send */}
+            {phase === 'send' || phase === 'sent'
+              ? <a className="btn primary flow-now" href={sendHref} onClick={(e) => { e.preventDefault(); go(sendHref); }}>{locked ? 'Results →' : 'Send →'}</a>
+              : <a className="flow-st" href={sendHref} title={sendWhy} onClick={(e) => { e.preventDefault(); go(sendHref); }}>Send →</a>}
+          </nav>
         </div>
       </div>
       {locked && (
-        <div className="ed-banner">
-          <I.shield size={18} /><span>This edition has been sent, so it’s read-only. Use “Duplicate” to reuse it.</span>
+        <div className="notice ed-locked">
+          <span className="ni" aria-hidden><I.lock size={12} /></span>
+          <div>This edition has been sent, so it’s read-only. Duplicate it to reuse the layout.</div>
           <form action={duplicateAction}><button type="submit" className="btn sm">Duplicate</button></form>
         </div>
       )}
-
       <div className={`ed-shell ed-v2 ${inspHidden ? 'no-insp' : ''}`}>
         {/* ---------- LEFT: content ---------- */}
         <div className="ed-col ed-left">
@@ -549,7 +623,19 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
             <h2>Content</h2>
             <span className="pane-c">{c.blocks.length} blocks</span>
             <span className="spacer" />
-            <button type="button" className="btn sm ghost" onClick={() => setOpen(null)} disabled={!open} title={`Collapse all (${mod} .)`}><I.collapse size={14} />Collapse</button>
+            {open && <button type="button" className="btn sm pane-collapse" onClick={() => setOpen(null)} title={`Collapse all (${mod} .)`}><I.collapse size={14} />Collapse</button>}
+            <span className="pop-anchor">
+              <button ref={keysRef} type="button" className="icon-btn sm" aria-haspopup="dialog" aria-expanded={keysOpen} onClick={() => setKeysOpen((o) => !o)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><I.keyboard size={16} /></button>
+              <Popover open={keysOpen} onClose={closeKeys} anchor={keysRef} label="Keyboard shortcuts" align="end" className="ed-keys">
+                <b>Keyboard shortcuts</b>
+                <dl>
+                  <dt><Kbd>{mod}</Kbd><Kbd>S</Kbd></dt><dd>Save a version</dd>
+                  <dt><Kbd>{mod}</Kbd><Kbd>↵</Kbd></dt><dd>Ask the copilot</dd>
+                  <dt><Kbd>{mod}</Kbd><Kbd>.</Kbd></dt><dd>Collapse all blocks</dd>
+                  <dt><Kbd>Esc</Kbd></dt><dd>Close menus and the inspector</dd>
+                </dl>
+              </Popover>
+            </span>
           </div>
           <fieldset ref={listRef} disabled={locked} className="ed-blocks">
             <div className={`blk meta ${open === 'meta' || !c.title ? 'open' : ''}`} data-flip="meta">
@@ -637,11 +723,6 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
               {renderBody('sources', open === 'sources', <SourcesEditor c={c} setC={setC} stories={stories} />)}
             </div>
           </fieldset>
-          <div className="ed-keys" aria-label="Keyboard shortcuts">
-            <span><Kbd>{mod}</Kbd><Kbd>S</Kbd> Save version</span>
-            <span><Kbd>{mod}</Kbd><Kbd>↵</Kbd> Ask copilot</span>
-            <span><Kbd>{mod}</Kbd><Kbd>.</Kbd> Collapse all</span>
-          </div>
         </div>
 
         {/* ---------- CENTER: preview ---------- */}
@@ -679,7 +760,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
                     <div className="wa-day">Today</div>
                     <div className="wa-b">
                       <div className="og">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={wa.og} alt="Link preview" /><div className="t"><b>{wa.title}</b><span>{wa.description}</span><small>{wa.host}</small></div></div>
-                      <div className="m">{wa.text}<span className="wa-time">10:00 <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden><path d="m1 5 3 3 6-7M6 8l1 1 6-8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
+                      <div className="m">{wa.text}<span className="wa-time">10:00 am <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden><path d="m1 5 3 3 6-7M6 8l1 1 6-8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
                     </div>
                     <div className="wa-note">The preview image updates when you save. WhatsApp caches previews per link.</div>
                   </>) : <div className="wa-load"><span className="skeleton" /><span className="skeleton" /></div>}
@@ -706,7 +787,7 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
             <div className="insp-b" ref={inspBody} key={tab}>
               {tab === 'ai' && (
                 <div className="cp">
-                  {!aiReady && <div className="notice warn cp-demo">Demo mode: connect an AI provider in <Link href="/app/settings?tab=ai">Settings → AI</Link> to edit with AI.</div>}
+                  {!aiReady && <div className="notice warn cp-demo"><span className="ni" aria-hidden>!</span><div>Demo mode. <Link href="/app/settings?tab=ai">Connect an AI provider</Link> to edit with the copilot.</div></div>}
                   {chat.length === 0 && !thinking ? (
                     <div className="cp-empty">
                       <span className="cp-orb" aria-hidden><I.sparkle size={22} /></span>
@@ -741,26 +822,29 @@ export function Editor({ edition, product, kb, stories, publicUrl, aiReady, dupl
               {tab === 'checks' && (
                 <div className="ck">
                   <div className="ck-sum">
-                    <Ring value={tally.passed} total={tally.total || 1} tone={checks ? ringTone : 'idle'} spinning={checking} size={52} stroke={5}>
-                      {checking ? null : checks ? <b>{tally.passed}</b> : <I.shield size={18} />}
+                    <Ring total={tally.total} spinning={checking || (approving && (stale || !checks))} size={52} stroke={5}
+                      parts={checks ? [{ n: tally.passed, tone: 'ok' }, { n: tally.warns, tone: 'warn' }, { n: tally.fails, tone: 'bad' }] : []}>
+                      {checking ? null : checks ? <span className="ring-frac"><b>{tally.passed}</b><i>/{tally.total}</i></span> : <I.shield size={18} />}
                     </Ring>
                     <div className="ck-sum-t">
-                      <b>{checking ? 'Checking links and facts…' : checks ? `${tally.passed} of ${tally.total} passed` : 'Not checked yet'}</b>
+                      <b>{checking ? 'Checking links and facts…' : checks ? (tally.fails ? `${tally.passed} of ${tally.total} passed` : tally.warns ? `All clear · ${tally.warns} to review` : `All ${tally.total} passed`) : 'Not checked yet'}</b>
                       {checks ? <span className="hint">Last run {when(checks.at)}</span> : <span className="hint">Sources, wording, links, size and an AI fact-check.</span>}
                     </div>
                     <button type="button" className={`icon-btn ck-run ${checking ? 'busy' : ''}`} onClick={runChecks} disabled={checking || locked} title="Run all checks again" aria-label="Run all checks again"><I.refresh size={17} /></button>
                   </div>
                   {checks ? (
                     <>
-                      {stale && <div className="notice warn">You’ve edited since these results. Run the checks again (Approve does it for you).</div>}
-                      {blocking.length > 0 ? <div className="notice bad">{blocking.length} blocking check(s). Approval stays locked until they pass or you override them with a reason.</div> : <div className="notice ok">No blocking issues. You can approve.</div>}
+                      {stale && <div className="notice warn"><span className="ni" aria-hidden>!</span><div>You’ve edited since these results. Run the checks again; Approve does it for you.</div></div>}
+                      {nBlock > 0
+                        ? <div className="notice bad"><span className="ni" aria-hidden>!</span><div><b>{nBlock} {nBlock === 1 ? 'check blocks' : 'checks block'} approval</b><span className="ck-nsub">Fix {nBlock === 1 ? 'it' : 'them'}, or override with a reason.</span></div></div>
+                        : <div className="notice ok"><span className="ni" aria-hidden><I.check size={11} /></span><div>Nothing blocks approval.</div></div>}
                       {sortedChecks.issues.length > 0 && <>
                         <div className="ck-grp">Needs attention · {sortedChecks.issues.length}</div>
                         <ul className="cl">{sortedChecks.issues.map((r, i) => <CheckRow key={r.id + r.label} i={i} r={r} overridden={overrides[ovKey(r)]} onOpen={() => { if (r.blockId) focusBlock(r.blockId); }} onOverride={(reason) => override(r.id, reason)} locked={locked} />)}</ul>
                       </>}
                       {sortedChecks.passed.length > 0 && (
                         <details className="ck-passed" open={!sortedChecks.issues.length}>
-                          <summary><span className="ic ok">✓</span>Passed · {sortedChecks.passed.length}<I.chevron size={12} /></summary>
+                          <summary><span className="ic ok"><I.check size={11} /></span>Passed · {sortedChecks.passed.length}<I.chevron size={12} /></summary>
                           <ul className="cl">{sortedChecks.passed.map((r, i) => <CheckRow key={r.id + r.label} i={i} r={r} overridden={overrides[ovKey(r)]} onOpen={() => { if (r.blockId) focusBlock(r.blockId); }} onOverride={(reason) => override(r.id, reason)} locked={locked} />)}</ul>
                         </details>
                       )}
@@ -838,16 +922,81 @@ function StatusBar() {
   );
 }
 
+/** Status pill that cross-fades when the edition moves through the flow. */
+function StatusSwap({ status }: { status: string }) {
+  const [s, setS] = useState<{ cur: string; prev: string | null }>({ cur: status, prev: null });
+  useEffect(() => {
+    if (status === s.cur) return;
+    setS({ cur: status, prev: s.cur });
+    const t = setTimeout(() => setS((x) => ({ ...x, prev: null })), 420);
+    return () => clearTimeout(t);
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pill = (st: string, cls: string) => {
+    const [tone, label] = STATUS_LABEL[st] || ['', st];
+    return <span key={`${st}-${cls}`} className={`pill ${tone} ${cls}`} aria-hidden={cls === 'sp-out' || undefined}><span className="dot" />{label}</span>;
+  };
+  return <span className="tb-status" role="status">{s.prev && pill(s.prev, 'sp-out')}{pill(s.cur, s.prev ? 'sp-in' : '')}</span>;
+}
+
+/** Primary pill that collapses into a green check on success. */
+function MorphButton({ morph, busy, onClick, children }: { morph: boolean; busy: boolean; onClick: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const w = useRef(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (!morph) { w.current = el.offsetWidth; return; }
+    const h = el.offsetHeight;
+    const a = el.animate([{ width: `${w.current}px` }, { width: `${h}px` }], { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+    return () => a.cancel();
+  });
+  return (
+    <button ref={ref} type="button" className={`btn primary flow-now ${morph ? 'morph' : ''}`} onClick={onClick} disabled={busy} aria-label={morph ? 'Approved' : undefined}>
+      {morph ? <I.check size={16} /> : busy ? <><span className="spin" />Approving…</> : children}
+    </button>
+  );
+}
+
+/* Failed links arrive as "url (code)" lines; show them as rows instead of a wall of URLs. */
+function parseLinks(detail?: string) {
+  if (!detail) return [];
+  return detail.split('\n').map((line) => {
+    const m = line.trim().match(/^(\S+)\s+\((.*)\)$/);
+    if (!m) return null;
+    let host = m[1], path = '';
+    try { const u = new URL(m[1]); host = u.hostname.replace(/^www\./, ''); path = (u.pathname + u.search).replace(/\/$/, ''); } catch { /* keep raw */ }
+    const code = m[2];
+    const n = Number(code);
+    const why = n === 404 || n === 410 ? 'Not found' : n === 401 || n === 403 ? 'Blocked' : n >= 500 ? 'Server error' : n >= 300 && n < 400 ? 'Redirects' : 'Unreachable';
+    return { url: m[1], host, path, why, code };
+  }).filter(Boolean) as { url: string; host: string; path: string; why: string; code: string }[];
+}
+
 function CheckRow({ r, i, overridden, onOpen, onOverride, locked }: { r: CheckResult; i: number; overridden?: string; onOpen: () => void; onOverride: (reason: string) => void; locked: boolean }) {
   const [ask, setAsk] = useState(false);
   const [reason, setReason] = useState('');
-  const sym = { ok: '✓', warn: '!', fail: '✕', skip: '–' }[r.status];
+  const sym = { ok: <I.check size={11} />, warn: '!', fail: <I.close size={10} />, skip: '–' }[r.status];
+  const links = r.id === 'links' ? parseLinks(r.detail) : [];
+  const isBlocking = r.blocking && r.status === 'fail' && !overridden;
   return (
     <li style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}>
       <span className={`ic ${overridden ? 'skip' : r.status}`}>{overridden ? '↷' : sym}</span>
-      <div style={{ minWidth: 0 }}>
-        <div className={`ck-l ${r.blockId ? 'link' : ''} ${overridden ? 'struck' : ''}`} onClick={onOpen}>{r.label}{r.blocking && r.status === 'fail' && !overridden ? <span className="ck-block">Blocking</span> : null}</div>
-        {r.detail && <div className="hint ck-d">{r.detail}</div>}
+      <div className="ck-main">
+        <div className="ck-top">
+          <div className={`ck-l ${r.blockId ? 'link' : ''} ${overridden ? 'struck' : ''}`} onClick={onOpen}>{r.label}</div>
+          {isBlocking && <span className="pill bad ck-block">Blocking</span>}
+        </div>
+        {links.length > 0 ? (
+          <ul className="ck-links">
+            {links.map((l) => (
+              <li key={l.url}>
+                <span className="ck-lk-ic" aria-hidden><I.link size={13} /></span>
+                <span className="ck-lk-t" title={l.url}><b>{l.host}</b><span className="ck-lk-m"><span className={`pill ${l.why === 'Redirects' ? 'warn' : 'bad'}`} title={`Response: ${l.code}`}>{l.why}</span>{l.path && <span className="ck-lk-p">{l.path}</span>}</span></span>
+                <a className="icon-btn sm" href={l.url} target="_blank" rel="noreferrer" aria-label={`Open ${l.host}`} title="Open the link"><I.external size={13} /></a>
+              </li>
+            ))}
+          </ul>
+        ) : r.detail && <div className="hint ck-d">{r.detail}</div>}
         {r.blockId && <button type="button" className="ck-go" onClick={onOpen}>Show block <I.chevron size={10} /></button>}
         {overridden && <div className="hint">Overridden: {overridden} <button type="button" className="btn sm ghost" onClick={() => onOverride('')}>Undo</button></div>}
         {r.status === 'fail' && !overridden && !locked && (ask ? (
@@ -936,7 +1085,7 @@ function BlockForm({ b, c, kb, stories, setBlock, setC }: { b: Block; c: Edition
           <label className="f"><span>Section</span><select className="in" value={b.pillar} onChange={(e) => up({ pillar: e.target.value })}>{(Object.keys(PILLARS) as Pillar[]).map((k) => <option key={k} value={k}>{PILLARS[k].label}</option>)}</select></label>
           <label className="f"><span>Honest status</span><select className="in" value={b.status} onChange={(e) => up({ status: e.target.value, cta: MATURITY[e.target.value as Maturity].cta })}>{(Object.keys(MATURITY) as Maturity[]).map((k) => <option key={k} value={k}>{MATURITY[k].label}</option>)}</select></label>
         </div>
-        <div className="notice mat-note"><b>{st.label}:</b> may say {st.allowed}.{st.banned.length ? <> Never: {st.banned.map((x) => `“${x}”`).join(', ')}.</> : null}</div>
+        <div className="notice mat-note"><span className="ni" aria-hidden>i</span><div><b>{st.label}</b> may say {st.allowed}.{st.banned.length ? <> Never: {st.banned.map((x) => `“${x}”`).join(', ')}.</> : null}</div></div>
         <label className="f"><span>Title</span><input className="in" value={b.title} onChange={(e) => up({ title: e.target.value, placeholder: false })} /></label>
         <label className="f"><span>Text (problem → what it does → approved result)</span><textarea className="in" rows={4} value={b.body} onChange={(e) => up({ body: e.target.value, placeholder: false })} /></label>
         <label className="f"><span>Image or short video URL</span><MediaInput value={b.mediaUrl || ''} onChange={(v) => up({ mediaUrl: v || undefined })} /></label>
@@ -995,7 +1144,7 @@ function MediaInput({ value, onChange, accept = 'image/*,video/mp4' }: { value: 
   const isImg = /\.(png|jpe?g|gif|webp|avif|svg)(\?|$)/i.test(value);
   return (
     <div className="media-in">
-      {err && <div className="notice bad">{err}</div>}
+      {err && <div className="notice bad"><span className="ni" aria-hidden>!</span><div>{err}</div></div>}
       <div className="row">
         <input className="in" style={{ flex: 1 }} value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://…" />
         <label className="btn sm" style={{ cursor: 'pointer' }}>{busy ? <><span className="spin" />Uploading…</> : 'Upload'}

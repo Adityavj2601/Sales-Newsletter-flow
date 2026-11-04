@@ -82,7 +82,7 @@ export function Popover({ open, onClose, anchor, children, className = '', label
     return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key, true); cancelAnimationFrame(f); };
   }, [open, onClose, anchor]);
   if (!mounted) return null;
-  return <div ref={ref} className={`pop ${side} ${align} ${leaving ? 'out' : ''} ${className}`} role={role} aria-label={label}>{children}</div>;
+  return <div ref={ref} className={`ed-pop ${side} ${align} ${leaving ? 'out' : ''} ${className}`} role={role} aria-label={label}>{children}</div>;
 }
 
 /* ---------- Modal sheet (portal, focus trap, exit animation) ---------- */
@@ -96,6 +96,9 @@ export function Modal({ open, onClose, label, children, className = '', dismissa
   closeRef.current = onClose;
   const dis = useRef(dismissable);
   dis.current = dismissable;
+  // Portal only after mount: a sheet that starts open (e.g. ?new=1) must not differ between server and hydration.
+  const [client, setClient] = useState(false);
+  useEffect(() => setClient(true), []);
   useEffect(() => {
     if (!open) return;
     prevFocus.current = document.activeElement as HTMLElement;
@@ -114,8 +117,8 @@ export function Modal({ open, onClose, label, children, className = '', dismissa
     window.addEventListener('keydown', key);
     const t = requestAnimationFrame(() => (ref.current?.querySelector<HTMLElement>('[data-autofocus]') || ref.current)?.focus());
     return () => { window.removeEventListener('keydown', key); document.body.style.overflow = prev; cancelAnimationFrame(t); prevFocus.current?.focus?.(); };
-  }, [open]);
-  if (!mounted || typeof document === 'undefined') return null;
+  }, [open, client]);
+  if (!mounted || !client) return null;
   return createPortal(
     <div className={`sheet-backdrop ed-modal ${leaving ? 'out' : ''}`} onMouseDown={(e) => { if (e.target === e.currentTarget && dis.current) onClose(); }}>
       <div ref={ref} tabIndex={-1} className={`sheet ${className}`} role="dialog" aria-modal="true" aria-label={label}>{children}</div>
@@ -171,18 +174,30 @@ export function ScaledPreview({ html, title, width }: { html: string; title: str
   );
 }
 
-/* ---------- Progress ring ---------- */
-export function Ring({ value, total, size = 44, stroke = 4.5, tone = 'ok', spinning = false, children }: { value: number; total: number; size?: number; stroke?: number; tone?: string; spinning?: boolean; children?: React.ReactNode }) {
+/* ---------- Progress ring ----------
+   Arc length shows the pass ratio; each state gets its own segment (passed → failing → warnings),
+   so 14/18 with one failure reads as "mostly green, a sliver of red" rather than an all-red ring. */
+export type RingPart = { n: number; tone: 'ok' | 'warn' | 'bad' };
+export function Ring({ parts = [], total, size = 44, stroke = 4.5, spinning = false, children }: { parts?: RingPart[]; total: number; size?: number; stroke?: number; spinning?: boolean; children?: React.ReactNode }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const p = total ? value / total : 0;
+  const shown = parts.filter((p) => p.n > 0);
+  const gap = shown.length > 1 ? Math.min(3, c * 0.012) + stroke : 0; // round caps need the stroke width as extra gap
+  let at = 0;
   return (
-    <span className={`ring ${tone} ${spinning ? 'spinning' : ''}`} style={{ width: size, height: size }}>
+    <span className={`ck-ring ${spinning ? 'spinning' : ''}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className="ring-track" />
-        <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className="ring-val" style={{ ['--c' as any]: c }} strokeDasharray={c} strokeDashoffset={spinning ? c * 0.72 : c * (1 - p)} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className="ck-ring-track" />
+        {spinning
+          ? <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className="ck-ring-val spin-arc" strokeDasharray={`${c * 0.28} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+          : total > 0 && shown.map((p, i) => {
+            const len = Math.max(0.001, (p.n / total) * c - gap);
+            const el = <circle key={p.tone} cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className={`ck-ring-val ${p.tone}`} style={{ ['--len' as any]: `${len}px`, animationDelay: `${i * 90}ms` }} strokeDasharray={`${len} ${c}`} strokeDashoffset={-at} transform={`rotate(-90 ${size / 2} ${size / 2})`} />;
+            at += (p.n / total) * c;
+            return el;
+          })}
       </svg>
-      {children && <span className="ring-c">{children}</span>}
+      {children && <span className="ck-ring-c">{children}</span>}
     </span>
   );
 }
