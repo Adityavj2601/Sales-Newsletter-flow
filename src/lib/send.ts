@@ -65,7 +65,7 @@ export function queueEdition(editionId: string, cfg: SendConfig) {
   if (!queued) return 0;
   // A top-up send to new or remaining people keeps a sent edition "sent" (its date and rotation stay as they were).
   if (e.status !== 'sent') update('editions', e.id, { status: 'sending', send_config: JSON.stringify(cfg), scheduled_at: e.scheduled_at || now() });
-  notify(e.product_id, 'send', e.status === 'sent' ? `Top-up send for edition #${e.number}` : `Sending edition #${e.number}`, `${queued} messages queued. They go out at the pace set in Settings.`, `/app/editions/${e.id}/distribute`);
+  notify(e.product_id, 'send', e.status === 'sent' ? `Top-up send for #${e.number}` : `Sending #${e.number}`, `${queued} messages queued. They go out at the pace set in Settings.`, `/app/editions/${e.id}/distribute`);
   return queued;
 }
 
@@ -88,7 +88,7 @@ export function startDueEditions(log: (s: string) => void) {
     try {
       const n = queueEdition(e.id, parse(e.send_config, { channels: ['email'], audience: {} }));
       const ed = getEdition(e.id);
-      log(`Started scheduled edition #${ed?.number} “${ed?.content.title}”: ${n} queued`);
+      log(`Started scheduled #${ed?.number} “${ed?.content.title}”: ${n} queued`);
     } catch (err: any) {
       update('editions', e.id, { status: 'approved', scheduled_at: null });
       const ed = getEdition(e.id);
@@ -242,8 +242,8 @@ export async function processQueue(log: (s: string) => void) {
       update('editions', e.id, { status: 'sent', sent_at: now() });
       markFeatured(e.id);
       const s = get("SELECT SUM(status NOT IN ('failed','skipped')) AS ok, SUM(status = 'failed') AS bad FROM deliveries WHERE edition_id = ? AND channel IN ('email','whatsapp')", e.id);
-      notify(e.product_id, 'send', `Edition #${e.number} sent`, `${s?.ok || 0} delivered${s?.bad ? `, ${s.bad} failed` : ''}.`, `/app/editions/${e.id}/analytics`);
-      log(`Edition #${e.number} finished sending`);
+      notify(e.product_id, 'send', `#${e.number} sent`, `${s?.ok || 0} delivered${s?.bad ? `, ${s.bad} failed` : ''}.`, `/app/editions/${e.id}/analytics`);
+      log(`#${e.number} finished sending`);
     }
   }
 }

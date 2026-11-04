@@ -55,11 +55,11 @@ async function execute(type: JobType, productId: string, log: (s: string) => voi
   if (type === 'draft') {
     const planned = nextSendDate(getSetting('general'));
     const exists = get('SELECT id, number, status FROM editions WHERE product_id = ? AND planned_for = ?', p.id, planned);
-    if (exists && !config.force) { log(`Edition #${exists.number} is already ${exists.status === 'sent' ? 'sent' : 'planned'} for ${planned}. Skipped.`); return; }
+    if (exists && !config.force) { log(`#${exists.number} is already ${exists.status === 'sent' ? 'sent' : 'planned'} for ${planned}. Skipped.`); return; }
     // Run now: draft for the next free send date instead of doubling up a week.
     const target = exists ? nextSendDate(getSetting('general'), all('SELECT planned_for FROM editions WHERE product_id = ?', p.id).map((r) => r.planned_for)) : planned;
     const { edition, mode, model } = await draftEdition(p.id, { plannedFor: target }, 'automation');
-    log(`Drafted edition #${edition.number} (${mode === 'ai' ? model : 'demo mode'})`);
+    log(`Drafted #${edition.number} (${mode === 'ai' ? model : 'demo mode'})`);
     const checks = await runChecks(edition.id, true);
     const fails = checks.results.filter((r) => r.status === 'fail').length;
     log(`Checks: ${fails} failing, ${checks.results.filter((r) => r.status === 'warn').length} warnings`);
