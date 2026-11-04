@@ -8,7 +8,7 @@ import { getEdition } from '@/lib/editions';
 import { getProduct, baseUrl, getSetting, smtpReady, waReady } from '@/lib/settings';
 import { audienceFor, canSend } from '@/lib/send';
 import { renderWhatsApp } from '@/lib/render/email';
-import { utcToZonedInput, fmtDate, fmtDay, fmtTime, fmtPhone, edNo } from '@/lib/format';
+import { utcToZonedInput, fmtDate, fmtDay, fmtTime, fmtPhone, edNo, relDay } from '@/lib/format';
 import { flowState } from '@/lib/flow';
 import { StatusPill } from '@/components/bits';
 import { Icon } from '@/components/people/Icon';
@@ -66,6 +66,9 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
   const reach = new Set([...emailAud, ...waAud].map((c) => c.id)).size;
   const at = (iso: string | null) => `${fmtDay(iso, tz)}, ${fmtTime(iso, tz)}`;
   const editor = `/app/editions/${e.id}`;
+  // "Planned for tomorrow" reads best for the next two days; further out (or overdue) the date itself is clearer.
+  const rd = relDay(e.planned_for, tz);
+  const planned = e.planned_for && !live && e.status !== 'scheduled' ? `Planned for ${rd === 'today' || rd === 'tomorrow' ? rd : fmtDay(e.planned_for, tz)}` : '';
   const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
   const audienceLine = reach ? `${people(emailAud.length)} by email · ${waAud.length} on WhatsApp.` : 'No one has agreed to email or WhatsApp yet.';
 
@@ -115,7 +118,7 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
         <div>
           <div className="crumbs"><Link href="/app/editions">Editions</Link> / <Link href={editor}>{edNo(e.number)}</Link> / Send</div>
           <h1>{e.content.title}</h1>
-          <p className="sub">{p.newsletter_name || p.name} · Edition {edNo(e.number)}{e.planned_for && !live ? ` · planned for ${fmtDay(e.planned_for, tz)}` : ''}</p>
+          <p className="sub">{edNo(e.number)}<span className="sep" aria-hidden>·</span>{p.newsletter_name || p.name}{planned ? <><span className="sep" aria-hidden>·</span>{planned}</> : null}</p>
         </div>
         <div className="row">
           <a className="btn" href={link + (isSent ? '' : '?preview=1')} target="_blank" rel="noreferrer"><Icon name="eye" size={15} />{isSent ? 'Open page' : 'Preview'}</a>

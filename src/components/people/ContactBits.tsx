@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Spinner } from '@/components/ui';
+import { Spinner, Submit } from '@/components/ui';
 import { BodySheet as Sheet } from '@/components/people/BodySheet';
 import { Icon } from './Icon';
 
@@ -19,6 +19,42 @@ export function EditSheet({ children, label = 'Edit', open: open0 = false }: { c
 function Busy() {
   const { pending } = useFormStatus();
   return pending ? <span className="pgroup-busy" aria-live="polite"><Spinner size={12} />Saving…</span> : null;
+}
+
+const KEEP = ['id', 'first_name', 'last_name', 'email', 'phone', 'company', 'role', 'city', 'tags', 'consent_source'];
+
+/**
+ * Inline note field: a quiet one-line field that opens into a textarea on click. Saving appends a dated line
+ * to the contact's notes ("[2026-11-04] …") through the same save as the Edit sheet, so nothing else changes.
+ */
+export function NoteComposer({ action, c, today, name }: { action: (fd: FormData) => Promise<void>; c: Record<string, any>; today: string; name: string }) {
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const body = text.trim();
+  const notes = body ? `${String(c.notes || '').trimEnd()}${c.notes ? '\n' : ''}[${today}] ${body}` : String(c.notes || '');
+  const close = () => { setText(''); setOpen(false); ref.current?.blur(); };
+  return (
+    <form action={action} ref={formRef} className={`pnote-new${open ? ' is-open' : ''}`}>
+      {KEEP.map((k) => <input key={k} type="hidden" name={k} value={c[k] ?? ''} />)}
+      {c.email_consent ? <input type="hidden" name="email_consent" value="1" /> : null}
+      {c.wa_consent ? <input type="hidden" name="wa_consent" value="1" /> : null}
+      <input type="hidden" name="notes" value={notes} />
+      <textarea ref={ref} className="in pnote-in" aria-label="New note" rows={open ? 3 : 1} value={text} placeholder={`Add a note about ${name}…`}
+        onFocus={() => setOpen(true)} onBlur={() => { if (!text.trim()) setOpen(false); }} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { e.preventDefault(); close(); }
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && body) { e.preventDefault(); formRef.current?.requestSubmit(); }
+        }} />
+      {open && (
+        <div className="pnote-acts">
+          <button type="button" className="btn sm ghost" onMouseDown={(e) => e.preventDefault()} onClick={close}>Cancel</button>
+          <Submit className="btn sm primary" pending="Saving…" disabled={!body}>Save note</Submit>
+        </div>
+      )}
+    </form>
+  );
 }
 
 /** Live consent switches: flipping one saves immediately (all other fields are carried along unchanged). */

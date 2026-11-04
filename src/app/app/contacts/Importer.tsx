@@ -120,6 +120,7 @@ export function ContactsActions({ title, eyebrow, sub, openImport, openAdd, empt
       <div className="ph">
         <div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p className="sub">{sub}</p></div>
         <div className="row">
+          {!empty && <a className="btn cexport" href="/api/export?type=contacts">Export CSV</a>}
           <button type="button" className="btn" onClick={() => open('import')}><Icon name="upload" size={15} />Import CSV</button>
           <button type="button" className="btn primary" onClick={() => open('add')}><Icon name="plus" size={15} stroke={2.2} />Add contact</button>
         </div>
