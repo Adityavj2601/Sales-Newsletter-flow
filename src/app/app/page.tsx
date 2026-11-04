@@ -7,8 +7,8 @@ import { configuredProviders } from '@/lib/ai/providers';
 import { listEditions } from '@/lib/editions';
 import { flowState } from '@/lib/flow';
 import { FlowStepper } from '@/components/FlowStepper';
-import { fmtDay, fmtTime, edNo, todayIn, TZ_DEFAULT, WEEKDAYS } from '@/lib/format';
-import { editionMetrics } from '@/lib/metrics';
+import { fmtDay, fmtTime, edNo, relDay, todayIn, TZ_DEFAULT, WEEKDAYS } from '@/lib/format';
+import { editionMetrics, pct } from '@/lib/metrics';
 import { StatusPill, Avatar } from '@/components/bits';
 import { Icon, type IconName } from '@/components/shell/icons';
 import { KindIcon, cleanTitle, typo } from '@/components/shell/kinds';
@@ -22,7 +22,7 @@ export const metadata = { title: 'Home' };
 const clock = (hhmm: string) => fmtTime(`2000-01-01T${/^\d{1,2}:\d{2}$/.test(hhmm) ? hhmm.padStart(5, '0') : '10:00'}:00Z`, 'UTC');
 /** The calendar day of an instant in the app's time zone. */
 const zonedDay = (iso: string, tz: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
-const share = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '0%');
+const CHANNEL: Record<string, string> = { email: 'Email', whatsapp: 'WhatsApp API', wa_manual: 'WhatsApp' };
 
 function Ring({ done, total, size = 96 }: { done: number; total: number; size?: number }) {
   const r = 34, c = 2 * Math.PI * r, off = c * (1 - done / total);
@@ -37,14 +37,14 @@ function Ring({ done, total, size = 96 }: { done: number; total: number; size?: 
   );
 }
 
-/** Every tile has the same four lines: icon, number, label, one meta line. */
-function Stat({ id, icon, value, label, meta }: { id: string; icon: IconName; value: number; label: string; meta: string }) {
+/** The Results overview tile, compact: icon, number, label (· share of delivered), one meta line. */
+function Stat({ id, icon, value, label, share, meta, tone = '' }: { id: string; icon: IconName; value: number; label: string; share?: string; meta: string; tone?: string }) {
   return (
     <div className="stat-tile">
-      <span className="icon-chip" aria-hidden><Icon name={icon} size={17} /></span>
+      <span className={`icon-chip ${tone}`} aria-hidden><Icon name={icon} size={16} /></span>
       <div className="sv"><SeenNumber id={id} value={value} /></div>
-      <div className="sk">{label}</div>
-      <div className="sm">{meta}</div>
+      <div className="sk">{label}{share && <span className="k-pct"> · {share}</span>}</div>
+      <div className="sm" title={meta}>{meta}</div>
     </div>
   );
 }
@@ -78,11 +78,21 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
   const doneCount = steps.filter((s) => s.done).length;
   const nextSetup = steps.findIndex((s) => !s.done);
 
-  const last4 = eds.filter((e) => e.status === 'sent').slice(0, 4).map((e) => e.id);
-  const m = editionMetrics(last4);
-  const sent = m.delivered, views = m.readers, intents = m.intentPeople, unsubs = m.unsubscribes;
+  // The last sent edition, measured exactly like its Results overview (same tiles, same “of delivered”).
+  const m = editionMetrics(lastSent ? [lastSent.id] : []);
+  const sent = m.delivered;
   const hot = all("SELECT * FROM contacts WHERE product_id = ? AND status = 'active' AND score > 0 ORDER BY (last_intent_at IS NOT NULL) DESC, last_intent_at DESC, score DESC LIMIT 5", p.id);
-  const notes = all('SELECT * FROM notifications WHERE product_id = ? OR product_id IS NULL ORDER BY created_at DESC LIMIT 6', p.id);
+  // One row per edition send: “Sending #5” and “#5 sent” collapse into the latest of the two.
+  const seenSend = new Set<string>();
+  const notes = all('SELECT * FROM notifications WHERE product_id = ? OR product_id IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 16', p.id)
+    .filter((x) => {
+      const ed = x.kind === 'send' && /\/app\/editions\/([^/?#]+)/.exec(String(x.link || ''))?.[1];
+      if (!ed) return true;
+      if (seenSend.has(ed)) return false;
+      seenSend.add(ed);
+      return true;
+    })
+    .slice(0, 5);
   const jobs = all('SELECT * FROM jobs WHERE product_id = ? AND enabled = 1 ORDER BY next_run_at LIMIT 4', p.id);
   const ai = configuredProviders();
 
@@ -92,11 +102,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
   const today = new Intl.DateTimeFormat('en-IN', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' }).format(now);
   const first = (user.name || '').split(/\s+/)[0];
   const dayDiff = (d: string) => Math.round((+new Date(d.slice(0, 10) + 'T12:00:00Z') - +new Date(todayIn(tz) + 'T12:00:00Z')) / 86400_000);
-  const daysTo = (d?: string | null) => {
-    if (!d) return '';
-    const diff = dayDiff(d);
-    return diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : diff > 1 ? `in ${diff} days` : diff === -1 ? 'yesterday' : `${-diff} days ago`;
-  };
 
   // The ONE flow model (lib/flow.ts): the same title and action the Editions page and the editor show.
   const state = flowState(next, { shortlisted: short });
@@ -150,7 +155,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
       <div className="hero-body">
         {next && (
           <div className="hero-ed">
-            <div className="hero-meta"><Icon name="calendar" size={15} /><span>{edNo(next.number)} · {fmtDay(next.planned_for)}</span>{next.planned_for && <span className={`pill ${overdue ? 'warn' : 'info'}`}>{daysTo(next.planned_for)}</span>}</div>
+            <div className="hero-meta"><Icon name="calendar" size={15} /><span>{edNo(next.number)} · {fmtDay(next.planned_for)}</span>{next.planned_for && <span className={`pill ${overdue ? 'warn' : 'info'}`}>{relDay(next.planned_for, tz)}</span>}</div>
             <div className="hero-title">{typo(next.content.title) || 'Untitled edition'}</div>
             {next.content.dek && <p className="hero-dek">{typo(next.content.dek)}</p>}
           </div>
@@ -181,17 +186,26 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
     </section>
   );
 
+  const sentDay = lastSent?.sent_at ? zonedDay(lastSent.sent_at, tz) : null;
+  const byCh = Object.entries(m.byChannel).map(([c, n]) => `${CHANNEL[c] || c}: ${n}`).join(' · ');
+  const of = (n: number) => (sent ? pct(n, sent) : undefined);
   const kpis = (
     <section className="card kpis" aria-labelledby="kpi-h">
-      <div className="card-head"><h2 id="kpi-h">Last {last4.length > 1 ? `${last4.length} editions` : 'edition'}</h2>{lastSent && <Link className="more" href={`/app/editions/${lastSent.id}/analytics`}>Latest report<Icon name="chevron" size={13} strokeWidth={2.2} /></Link>}</div>
-      {last4.length ? (
-        <div className="kpi-grid">
-          <Stat id={`${p.id}:delivered`} icon="send" value={sent} label="Delivered" meta={`Across ${last4.length} ${last4.length === 1 ? 'edition' : 'editions'}`} />
-          <Stat id={`${p.id}:readers`} icon="eye" value={views} label="Opened the page" meta={`${share(views, sent)} of delivered`} />
-          <Stat id={`${p.id}:intent`} icon="leads" value={intents} label="Showed interest" meta={`${share(intents, views)} of readers`} />
-          <Stat id={`${p.id}:unsubs`} icon="signout" value={unsubs} label="Unsubscribed" meta={`${share(unsubs, sent)} of delivered`} />
+      <div className="card-head">
+        <div className="kpi-h">
+          <h2 id="kpi-h">Last edition</h2>
+          {lastSent && <span className="hint">{edNo(lastSent.number)}<span className="sep" aria-hidden>·</span>Sent {sentDay ? relDay(sentDay, tz) : fmtDay(lastSent.sent_at, tz)}<span className="k-sh"><span className="sep" aria-hidden>·</span>% of delivered</span></span>}
         </div>
-      ) : <div className="empty"><b>Nothing sent yet</b><span>Numbers appear here after your first send.</span></div>}
+        {lastSent && <Link className="more" href={`/app/editions/${lastSent.id}/analytics`}>Results<Icon name="chevron" size={13} strokeWidth={2.2} /></Link>}
+      </div>
+      {lastSent ? (
+        <div className="kpi-grid">
+          <Stat id={`${p.id}:delivered`} icon="send" value={sent} label="Delivered" meta={`${byCh || 'Nothing delivered yet'}${m.failed ? ` · ${m.failed} failed` : ''}`} />
+          <Stat id={`${p.id}:readers`} icon="eye" value={m.readers} label="Opened the page" share={of(m.readers)} meta={m.anonViews ? `+${m.anonViews} views via shared link` : `${m.opens} email ${m.opens === 1 ? 'open' : 'opens'} (approximate)`} />
+          <Stat id={`${p.id}:halfway`} icon="doc" value={m.halfway} label="Read past halfway" share={of(m.halfway)} meta={`${m.finished} reached the end${m.avgTime ? ` · avg ${m.avgTime}s on page` : ''}`} />
+          <Stat id={`${p.id}:intent`} icon="leads" value={m.intentPeople} label="Showed interest" share={of(m.intentPeople)} tone="ok" meta={m.anonIntents ? `+${m.anonIntents} taps via shared link` : 'Interested, booked or tapped Our work'} />
+        </div>
+      ) : <p className="kpi-empty"><Icon name="chart" size={16} />Nothing sent yet. The numbers for each edition appear here after its first send.</p>}
     </section>
   );
 
@@ -270,11 +284,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
         <>
           <section className="card setup" aria-labelledby="setup-h">
             <div className="setup-side">
-              <Ring done={doneCount} total={steps.length} />
+              <Ring done={doneCount} total={steps.length} size={84} />
               <div>
                 <h2 id="setup-h">Finish setting up</h2>
                 <p className="hint">{steps.length - doneCount} {steps.length - doneCount === 1 ? 'step' : 'steps'} left before your first real send.</p>
-                {nextSetup >= 0 && <p className="hint setup-next">Up next: <Link href={steps[nextSetup].href}>{steps[nextSetup].label}</Link></p>}
+                {nextSetup >= 0 && <p className="hint setup-next" title={`Up next: ${steps[nextSetup].label}`}>Up next: <Link href={steps[nextSetup].href}>{steps[nextSetup].label}</Link></p>}
               </div>
             </div>
             {checklist}
@@ -290,11 +304,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ w
         </>
       )}
 
-      <h2 className="section-title">This week</h2>
-      {/* One column template for the whole dashboard: the work on the left, numbers, people and system on the right. */}
+      {/* Last edition's numbers as one compact row across the top; below it the work on the left, people and system on the right. */}
       <div className="home-grid">
+        <div className="h-kpis">{kpis}</div>
         <div className="home-col">{hero}<div className="h-act">{activity}</div></div>
-        <div className="home-col">{kpis}<div className="h-leads">{leads}</div><div className="h-sys">{system}</div></div>
+        <div className="home-col"><div className="h-leads">{leads}</div><div className="h-sys">{system}</div></div>
       </div>
     </div>
   );

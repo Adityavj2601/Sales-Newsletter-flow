@@ -93,13 +93,10 @@
 /* Search field */
 .cx-search { position: relative; display: flex; align-items: center; width: 250px; max-width: 100%; }
 .cx-search > .cx-ic { position: absolute; left: 10px; color: var(--faint); pointer-events: none; }
-.cx-search input[type="search"] {
-  width: 100%; border: 0; border-radius: var(--r-sm); padding: 7px 32px 7px 32px; background: var(--fill); color: var(--ink); font-size: 14px;
-  -webkit-appearance: none; appearance: none; transition: background var(--t1) var(--ease), box-shadow var(--t1) var(--ease);
-}
-.cx-search input[type="search"]::placeholder { color: var(--faint); }
+/* The search field is a regular .in field (white, hairline border, the shared focus), with room for the icon and clear button. */
+.cx-search input[type="search"].in { padding-left: 32px; padding-right: 32px; -webkit-appearance: none; appearance: none; }
 .cx-search input[type="search"]::-webkit-search-cancel-button { display: none; }
-.cx-search input[type="search"]:focus { outline: none; background: var(--surface); box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-ring); }
+.cx-search:focus-within > .cx-ic { color: var(--accent); }
 .cx-search-x { position: absolute; right: 8px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--faint); color: var(--surface); animation: pop var(--t2) var(--spring) both; }
 .cx-search-x:hover { background: var(--muted); opacity: 1; }
 
@@ -125,6 +122,7 @@
   animation: cx-bar-in var(--t3) var(--spring) both;
 }
 .cx-savebar.dirty .cx-savebar-msg { color: var(--ink); font-weight: 500; }
+.cx-savebar.clean:not(.has-note) { display: none; }
 
 /* Secret field */
 .cx-secret { display: flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; min-width: 0; animation: fade-in var(--t2) var(--ease) both; }
@@ -165,12 +163,13 @@
 .st-dim { color: var(--muted); }
 .st-src { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 
+/* Same field look as every .in (and the search below): white, hairline border, the shared focus. */
 .st-add {
-  display: flex; align-items: center; gap: 10px; padding: 7px 7px 7px 16px; background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow-1);
-  transition: box-shadow var(--t2) var(--ease);
+  display: flex; align-items: center; gap: 10px; padding: 5px 5px 5px 14px; background: var(--surface); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow var(--t1) var(--ease);
 }
-.st-add:hover { box-shadow: var(--shadow-2); }
-.st-add:focus-within { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-ring); }
+.st-add:hover { box-shadow: inset 0 0 0 1px var(--fill-2); }
+.st-add:focus-within { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-ring); }
 .st-add > .cx-ic { color: var(--faint); transition: color var(--t1) var(--ease); }
 .st-add:focus-within > .cx-ic { color: var(--accent); }
 .st-add .in, .st-add input[type=url].in { flex: 1; min-width: 0; background: transparent; box-shadow: none; padding: 8px 2px; font-size: 15px; }
@@ -313,9 +312,15 @@ table.st-list { width: 100%; border-collapse: collapse; }
 /* Sections: one group heading, then the items as list rows inside one inset card (no half-empty grids). */
 .kw-sec { display: grid; gap: 8px; }
 .kw-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
-.kw-sec-h .btn { margin-right: -8px; }
-.kw-sec > .cx-group-f { margin-top: -2px; }
-.kw-list { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-1); overflow: hidden; }
+.kw-sec-h .btn { margin-right: -8px; flex: none; }
+.kw-sec-t { display: grid; gap: 2px; min-width: 0; }
+.kw-sec-t .cx-group-f { color: var(--faint); }
+.kw-about-empty { color: var(--muted); font-size: 14px; line-height: 1.5; }
+/* overflow stays visible so a row's ⋯ menu can open past the card edge; the rows round their own corners. */
+.kw-list { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-1); }
+.kw-list > .kw-card:first-child { border-top-left-radius: var(--r-lg); border-top-right-radius: var(--r-lg); }
+.kw-list > .kw-card:last-child { border-bottom-left-radius: var(--r-lg); border-bottom-right-radius: var(--r-lg); }
+.kw-list > .kw-card:has(.so-menu-pop) { z-index: 5; }
 .kw-list > .kw-card {
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 250px) auto; gap: 8px 28px; align-items: start;
   padding: 16px 18px 16px 20px; border-radius: 0; background: transparent; box-shadow: none; transform: none; transition: background var(--t1) var(--ease);
@@ -337,10 +342,8 @@ table.st-list { width: 100%; border-collapse: collapse; }
 .kw-perm { padding: 1px 8px; border-radius: 999px; background: var(--fill); color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .kw-perm.ok { background: var(--ok-bg); color: var(--ok); }
 .kw-feat { font-size: 12.5px; color: var(--faint); }
-.kw-card-acts { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
-.kw-del { opacity: 0; transition: opacity var(--t1) var(--ease), background var(--t1) var(--ease); }
-.kw-card:hover .kw-del, .kw-card:focus-within .kw-del { opacity: 1; }
-@media (hover: none) { .kw-del { opacity: 1; } }
+.kw-card-acts { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: -2px; }
+.kw-menu .so-more { width: 30px; height: 30px; }
 @media (max-width: 900px) {
   .kw-list > .kw-card { grid-template-columns: minmax(0, 1fr) auto; }
   .kw-proof { grid-column: 1; }
@@ -349,8 +352,7 @@ table.st-list { width: 100%; border-collapse: collapse; }
 @media (max-width: 560px) {
   .kw-list > .kw-card { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
   .kw-list > .kw-card + .kw-card::before { left: 16px; }
-  .kw-card-acts { grid-column: 1; grid-row: auto; flex-direction: row-reverse; justify-content: flex-end; margin-top: 2px; }
-  .kw-card-acts .kw-del { opacity: 1; }
+  .kw-card-acts { grid-column: 1; grid-row: auto; justify-content: space-between; margin: 2px -4px 0 0; }
 }
 .kw-blank {
   display: flex; align-items: center; justify-content: center; gap: 8px; padding: 22px; border-radius: var(--r-lg); border: 1.5px dashed var(--line); color: var(--muted); font-weight: 500;

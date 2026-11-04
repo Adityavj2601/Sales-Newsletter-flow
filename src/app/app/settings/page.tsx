@@ -67,7 +67,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             <form action={A.saveGeneral} className="se-form">
               <Group title="App">
                 <Row label="App name"><input className="in" name="appName" defaultValue={g.appName} /></Row>
-                <Row label="Public web address" sub={<>Every link, preview image and tracking pixel uses this. Now <b className="se-val">{baseUrl()}</b></>}>
+                <Row label="Public web address" sub="Every link, preview image and tracking pixel uses this.">
                   <input className="in" name="publicBaseUrl" type="url" defaultValue={g.publicBaseUrl} placeholder="https://brief.yourdomain.com" />
                 </Row>
               </Group>
@@ -380,15 +380,18 @@ function AiTab() {
             );
           })}
         </Group>
-        <Group title="Budget" footer="A typical edition uses 30–80k tokens.">
-          <Row label="Monthly token limit" sub="0 means no limit."><input className="in se-num" name="monthlyTokenLimit" type="number" min={0} defaultValue={ai.monthlyTokenLimit} /></Row>
-          <div className="cx-row se-meter-row">
-            <span className="cx-row-l"><span className="cx-row-t">Used this month</span><small className="cx-row-s">{num(used)} tokens{limit ? ` of ${num(limit)}` : ''}</small></span>
-            <span className="cx-row-c">{limit ? <span className={`se-meter ${pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : ''}`} role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Share of monthly token limit used"><i style={{ width: `${Math.max(pct, 1)}%` }} /></span> : <span className="hint">No limit set</span>}</span>
-          </div>
+        <Group title="Budget" footer="A typical edition uses 30–80k tokens. Once the limit is reached, AI requests stop until next month.">
+          {/* Empty means no limit; the action saves an empty field as 0. */}
+          <Row label="Monthly token limit" sub="Tokens per month, across all providers."><input className="in se-num" name="monthlyTokenLimit" type="number" min={0} step={1000} inputMode="numeric" defaultValue={limit || ''} placeholder="No limit" /></Row>
+          {limit > 0 && (
+            <div className="cx-row se-meter-row">
+              <span className="cx-row-l"><span className="cx-row-t">Used this month</span><small className="cx-row-s"><span className="tnum">{num(used)}</span> of <span className="tnum">{num(limit)}</span> tokens · {pct}%</small></span>
+              <span className="cx-row-c"><span className={`se-meter ${pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : ''}`} role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Share of monthly token limit used"><i style={{ width: `${Math.max(pct, 1)}%` }} /></span></span>
+            </div>
+          )}
         </Group>
         <section className="cx-group">
-          <h3 className="cx-group-h">This month’s usage</h3>
+          <h3 className="cx-group-h">This month’s usage{used > 0 && <span className="cx-group-n">{num(used)} tokens</span>}</h3>
           {usage.length ? (
             <div className="cx-group-box se-usage"><table className="tbl"><thead><tr><th>Provider</th><th>Model</th><th>Task</th><th className="num">Calls</th><th className="num">Input</th><th className="num">Output</th><th className="num">Errors</th></tr></thead>
               <tbody>{usage.map((u, i) => <tr key={i}><td>{PROVIDER_LABEL[u.provider as keyof typeof PROVIDER_LABEL] || u.provider}</td><td>{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div>

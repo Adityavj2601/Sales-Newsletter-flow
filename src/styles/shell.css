@@ -187,6 +187,10 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .cmdk-lbl mark { background: none; color: inherit; font-weight: 650; }
 .cmdk-hint { color: var(--muted); font-size: 13px; margin-left: 8px; }
 .cmdk-here { font-size: 12px; color: var(--faint); }
+.cmdk-alias { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--fill); color: var(--faint); font-size: 12px; }
+.cmdk-hint mark, .cmdk-alias mark { background: none; color: var(--ink); font-weight: 650; }
+.cmdk-item[aria-selected="true"] .cmdk-alias { background: rgba(255, 255, 255, 0.18); color: rgba(255, 255, 255, 0.78); }
+.cmdk-item[aria-selected="true"] .cmdk-hint mark, .cmdk-item[aria-selected="true"] .cmdk-alias mark { color: #fff; }
 .cmdk-enter { opacity: 0; font-size: 13px; transform: translateX(-4px); transition: opacity var(--t1) var(--ease), transform var(--t1) var(--ease); }
 .cmdk-item[aria-selected="true"] { background: var(--accent); color: #fff; }
 .cmdk-item[aria-selected="true"] .cmdk-ic { background: rgba(255, 255, 255, 0.2); color: #fff; }
@@ -237,13 +241,12 @@ kbd { font: 500 11px/1 var(--f-ui); }
 
 /* ---------- Home ---------- */
 .home { max-width: 1320px; }
-.home > .section-title { margin: 6px 0 -10px; }
 
-.card.setup { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 12px 30px; align-items: center; padding: 22px 24px; }
-.setup-side { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 18px; align-items: center; }
+.card.setup { display: grid; grid-template-columns: 284px minmax(0, 1fr); gap: 12px 30px; align-items: center; padding: 22px 24px; }
+.setup-side { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 16px; align-items: center; }
 .setup-side h2 { margin-bottom: 4px; }
 .setup-side .hint { margin: 0; line-height: 1.45; }
-.setup-side .setup-next { margin-top: 6px; }
+.setup-side .setup-next { margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ring { position: relative; flex: none; }
 .ring svg { display: block; }
 .ring circle { fill: none; stroke-width: 7; }
@@ -278,6 +281,7 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .home-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .home-col { display: grid; gap: 18px; min-width: 0; align-content: start; }
 .home-col > div { display: contents; }
+.home-grid > .h-kpis { grid-column: 1 / -1; min-width: 0; }
 .card.hero { display: flex; flex-direction: column; }
 .card.hero .card-head { margin-bottom: 14px; }
 .card.hero .flow-stepper { margin-bottom: 18px; }
@@ -308,9 +312,22 @@ kbd { font: 500 11px/1 var(--f-ui); }
 .next-step-t .hint { line-height: 1.45; margin-top: 1px; }
 .next-step-cta { display: flex; }
 
-/* Tiles size to their content (icon, number, label, one meta line), never stretched to a neighbour's height. */
-.kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
-.kpi-grid .stat-tile .icon-chip { margin-bottom: 6px; }
+/* Last edition: the Results overview tiles as one compact row (2×2 on phones). Number and icon share the
+   first line; label · share of delivered, then one meta line. Tiles never stretch to a neighbour's height. */
+.card.kpis { padding-bottom: 18px; }
+.card.kpis .card-head { margin-bottom: 14px; align-items: flex-start; }
+.kpi-h { display: grid; gap: 3px; min-width: 0; }
+.kpi-h .hint { font-size: 13px; }
+.kpi-h .sep { margin: 0 6px; color: var(--faint); }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.kpi-grid .stat-tile { grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 3px; padding: 14px 16px 15px; align-self: start; }
+.kpi-grid .stat-tile .icon-chip { grid-column: 2; grid-row: 1; margin: 0; align-self: start; }
+.kpi-grid .stat-tile .sv { grid-column: 1; grid-row: 1; font-size: 28px; align-self: center; }
+.kpi-grid .stat-tile .sk, .kpi-grid .stat-tile .sm { grid-column: 1 / -1; min-width: 0; }
+.kpi-grid .stat-tile .sm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-pct { color: var(--faint); font-weight: 500; }
+.kpi-empty { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 14px; }
+.kpi-empty .ico { color: var(--faint); }
 
 .people, .feed, .jobs, .status-list { list-style: none; margin: 0; padding: 0; }
 .people { display: grid; gap: 2px; margin: -6px -10px; }
@@ -362,7 +379,7 @@ a.feed-title:hover { color: var(--accent); opacity: 1; }
   .home-grid, .home-col { display: grid; gap: 18px; }
   .home-col { display: contents; }
   .home-grid > .home-col > .card.hero { order: 1; }
-  .home-grid > .home-col > .card.kpis { order: 2; }
+  .home-grid > .h-kpis { order: 2; }
   .home-grid .h-leads { order: 3; }
   .home-grid .h-act { order: 4; }
   .home-grid .h-sys { order: 5; }
@@ -371,14 +388,21 @@ a.feed-title:hover { color: var(--accent); opacity: 1; }
 @media (max-width: 760px) {
   .checklist { grid-template-columns: minmax(0, 1fr); }
 }
+@media (max-width: 700px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+  .kpi-grid .stat-tile { align-self: stretch; grid-template-rows: auto auto 1fr; }
+  .kpi-grid .stat-tile .sk { font-size: 12.5px; line-height: 1.35; }
+  .kpi-grid .stat-tile .sm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
+}
 @media (max-width: 560px) {
   .hero-title { font-size: 22px; }
   .next-step { grid-template-columns: 30px minmax(0, 1fr); }
   .next-step-cta { grid-column: 1 / -1; }
   .next-step-cta > *, .next-step-cta .btn { flex: 1; width: 100%; }
   .hero-actions .btn { flex: 1 1 auto; }
-  .kpi-grid .stat-tile { padding: 14px; }
-  .kpi-grid .stat-tile .sv { font-size: 26px; }
+  .kpi-grid .stat-tile { padding: 12px 14px 13px; }
+  .kpi-grid .stat-tile .sv { font-size: 24px; }
+  .kpi-h .hint .k-sh { display: none; }
   .person { grid-template-columns: 34px minmax(0, 1fr) 44px; }
   .status-list li { grid-template-columns: 8px 18px 72px minmax(0, 1fr); }
 }

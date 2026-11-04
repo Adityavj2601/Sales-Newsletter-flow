@@ -1,5 +1,6 @@
-/** Instant skeleton while a studio page loads: the standard page header, then cards. Routes with a
- *  distinctive shape (e.g. /app/editions and the editor) ship their own loading.tsx. */
+/** Instant skeleton while a studio page loads: the standard page header, then Home's shape (one compact row of
+ *  numbers, then the work beside people and system). Routes with a distinctive shape (e.g. /app/editions and the
+ *  editor) ship their own loading.tsx. */
 export default function Loading() {
   return (
     <div aria-busy="true" aria-label="Loading">
@@ -11,11 +12,11 @@ export default function Loading() {
         </div>
       </div>
       <div style={{ display: 'grid', gap: 18 }}>
-        <div className="grid2">
-          <div className="skeleton" style={{ height: 180, borderRadius: 18 }} />
-          <div className="skeleton" style={{ height: 180, borderRadius: 18 }} />
+        <div className="skeleton" style={{ height: 150, borderRadius: 18 }} />
+        <div className="grid2" style={{ alignItems: 'start', gap: 18 }}>
+          <div className="skeleton" style={{ height: 420, borderRadius: 18 }} />
+          <div className="skeleton" style={{ height: 300, borderRadius: 18 }} />
         </div>
-        <div className="skeleton" style={{ height: 260, borderRadius: 18 }} />
       </div>
     </div>
   );

@@ -76,13 +76,17 @@ export function SaveBar({ label = 'Save', pending = 'Saving…', children, note,
     f.requestSubmit();
   };
 
+  // One save pattern: nothing shows while the form matches what's saved; the first edit brings up the floating bar.
+  const show = dirty || busy;
   return (
-    <div ref={ref} className={`cx-savebar ${dirty ? 'dirty' : ''}`}>
-      <span className="cx-savebar-msg" aria-live="polite">{dirty ? <><span className="cx-pulse" aria-hidden />Unsaved changes</> : note}</span>
-      <span className="cx-savebar-actions">
-        {dirty && !busy && <button type="button" className="btn" onClick={revert}>Revert</button>}
-        {children}<Submit pending={pending}>{label}</Submit>
-      </span>
+    <div ref={ref} className={`cx-savebar ${show ? 'dirty' : 'clean'}${note ? ' has-note' : ''}`}>
+      <span className="cx-savebar-msg" aria-live="polite">{show ? <><span className="cx-pulse" aria-hidden />Unsaved changes</> : note}</span>
+      {show && (
+        <span className="cx-savebar-actions">
+          {!busy && <button type="button" className="btn" onClick={revert}>Revert</button>}
+          {children}<Submit pending={pending}>{label}</Submit>
+        </span>
+      )}
       {leaving && <UnsavedAlert scope={scope} onChoose={choose} />}
     </div>
   );

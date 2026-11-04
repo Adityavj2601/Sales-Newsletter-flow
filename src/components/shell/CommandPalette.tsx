@@ -108,19 +108,27 @@ export function CommandPalette({ products, current, switchAction, logoutAction, 
     return out;
   }, [products, current, items]);
 
-  const results = useMemo(() => {
+  type Row = { c: Cmd; hits: number[]; score: number; hintHits?: number[]; alias?: { text: string; hits: number[] } };
+  const results = useMemo<Row[]>(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return cmds.filter((c) => c.group !== 'Account' && !c.content).map((c) => ({ c, hits: [] as number[], score: 0 }));
     const seen: Partial<Record<Group, number>> = {};
     return (cmds
-      .map((c) => {
+      .map((c): Row | null => {
         const m = rank(needle, c.label, !c.content);
         if (m) return { c, hits: m.hits, score: m.score };
-        // Keywords and the secondary line (company, status) count only at a word start, below any label match, unhighlighted.
-        const k = rank(needle, `${c.keywords || ''} ${c.hint || ''}`.trim(), false, false);
-        return k ? { c, hits: [] as number[], score: k.score - 2000 } : null;
+        // The secondary line (company, status) counts at a word start, below any label match, and is highlighted where it matched.
+        const h = c.hint ? rank(needle, c.hint, false, false) : null;
+        if (h) return { c, hits: [], hintHits: h.hits, score: h.score - 2000 };
+        // A keyword alias (“articles” → Story pool) needs 3+ letters, and the matched word shows as a faint hint, so a result never appears for no visible reason.
+        if (needle.length < 3 || !c.keywords) return null;
+        for (const word of c.keywords.split(/\s+/)) {
+          const k = rank(needle, word, false, false);
+          if (k) return { c, hits: [], alias: { text: word, hits: k.hits }, score: k.score - 2200 };
+        }
+        return null;
       })
-      .filter(Boolean) as { c: Cmd; hits: number[]; score: number }[])
+      .filter(Boolean) as Row[])
       .sort((a, b) => b.score - a.score)
       .filter((r) => !r.c.content || (seen[r.c.group] = (seen[r.c.group] || 0) + 1) <= PER_GROUP);
   }, [q, cmds]);
@@ -149,7 +157,7 @@ export function CommandPalette({ products, current, switchAction, logoutAction, 
   };
 
   // Group while keeping score order inside groups (group order follows first appearance).
-  const grouped: { group: string; rows: { c: Cmd; hits: number[]; i: number }[] }[] = [];
+  const grouped: { group: string; rows: (Row & { i: number })[] }[] = [];
   results.forEach((r, i) => {
     let g = grouped.find((x) => x.group === r.c.group);
     if (!g) { g = { group: r.c.group, rows: [] }; grouped.push(g); }
@@ -182,7 +190,7 @@ export function CommandPalette({ products, current, switchAction, logoutAction, 
               {grouped.map((g) => (
                 <div key={g.group} role="group" aria-label={g.group}>
                   <div className="cmdk-grp" aria-hidden>{g.group}</div>
-                  {g.rows.map(({ c, hits, i }) => {
+                  {g.rows.map(({ c, hits, hintHits, alias, i }) => {
                     const here = c.href && c.group === 'Go to' && (c.href === '/app' ? path === '/app' : path.startsWith(c.href));
                     return (
                       <div
@@ -190,7 +198,11 @@ export function CommandPalette({ products, current, switchAction, logoutAction, 
                         className="cmdk-item" onMouseMove={() => i !== active && setActive(i)} onClick={() => choose(c)}
                       >
                         <span className="cmdk-ic"><Icon name={c.icon} size={17} /></span>
-                        <span className="cmdk-lbl"><Mark text={c.label} hits={hits} />{c.hint && <span className="cmdk-hint">{c.hint}</span>}</span>
+                        <span className="cmdk-lbl">
+                          <Mark text={c.label} hits={hits} />
+                          {c.hint && <span className="cmdk-hint"><Mark text={c.hint} hits={hintHits || []} /></span>}
+                          {alias && <span className="cmdk-alias"><span className="sr">, matches </span><Mark text={alias.text} hits={alias.hits} /></span>}
+                        </span>
                         {here ? <span className="cmdk-here">Current page</span> : <span className="cmdk-enter" aria-hidden>↵</span>}
                       </div>
                     );

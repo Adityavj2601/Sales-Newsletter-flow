@@ -107,7 +107,7 @@ export default async function Stories({ searchParams }: { searchParams: Promise<
         <form className="cx-search" role="search">
           <Icon name="search" size={15} />
           <input type="hidden" name="f" value={f} />
-          <input type="search" name="q" aria-label="Search stories" defaultValue={q} placeholder="Search stories" />
+          <input className="in" type="search" name="q" aria-label="Search stories" defaultValue={q} placeholder="Search stories" />
           {q && <Link href={`/app/stories?f=${f}`} className="cx-search-x" aria-label="Clear search" scroll={false}><Icon name="x" size={12} strokeWidth={2.4} /></Link>}
         </form>
       </div>
