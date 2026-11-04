@@ -5,7 +5,7 @@ export type Metrics = {
   delivered: number; failed: number; byChannel: Record<string, number>;
   readers: number; anonViews: number; opens: number;
   halfway: number; finished: number; avgTime: number;
-  intentPeople: number; cta: Record<string, number>; showcase: { value: string; n: number }[]; unsubscribes: number;
+  intentPeople: number; anonIntents: number; cta: Record<string, number>; showcase: { value: string; n: number }[]; unsubscribes: number;
 };
 
 const n = (sql: string, ...a: any[]) => Number(get(sql, ...a)?.n || 0);
@@ -20,7 +20,8 @@ export function editionMetrics(editionIds: string[]): Metrics {
   for (const r of all(`SELECT channel, COUNT(*) AS n FROM deliveries WHERE edition_id IN (${q}) AND channel <> 'test' AND status NOT IN ('failed','queued','skipped') GROUP BY channel`, ...ids)) byChannel[r.channel] = r.n;
   const delivered = Object.values(byChannel).reduce((a, b) => a + b, 0);
   const cta: Record<string, number> = {};
-  for (const r of all(`SELECT type, COUNT(DISTINCT ${WHO}) AS n FROM events WHERE edition_id IN (${q}) AND type IN ('interested','book','more','share','notnow','unsubscribe') GROUP BY type`, ...ids)) cta[r.type] = r.n;
+  // People = personal links. Shared-link (anonymous) taps can't be told apart, so they are reported separately.
+  for (const r of all(`SELECT type, COUNT(DISTINCT delivery_id) AS n FROM events WHERE edition_id IN (${q}) AND delivery_id IS NOT NULL AND type IN ('interested','book','more','share','notnow','unsubscribe') GROUP BY type`, ...ids)) cta[r.type] = r.n;
   return {
     delivered,
     failed: n(`SELECT COUNT(*) AS n FROM deliveries WHERE edition_id IN (${q}) AND status = 'failed'`, ...ids),
@@ -34,9 +35,10 @@ export function editionMetrics(editionIds: string[]): Metrics {
     finished: n(`SELECT COUNT(DISTINCT delivery_id) AS n FROM events WHERE edition_id IN (${q}) AND type = 'scroll' AND value = '100' AND delivery_id IS NOT NULL`, ...ids)
       + n(`SELECT COUNT(*) AS n FROM events WHERE edition_id IN (${q}) AND type = 'scroll' AND value = '100' AND delivery_id IS NULL`, ...ids),
     avgTime: Math.round(Number(get(`SELECT AVG(t) AS n FROM (SELECT MAX(CAST(value AS INTEGER)) AS t FROM events WHERE edition_id IN (${q}) AND type = 'time' GROUP BY ${WHO}) WHERE t BETWEEN 3 AND 1800`, ...ids)?.n || 0)),
-    intentPeople: n(`SELECT COUNT(DISTINCT ${WHO}) AS n FROM events WHERE edition_id IN (${q}) AND type IN ('interested','book','showcase')`, ...ids),
+    intentPeople: n(`SELECT COUNT(DISTINCT delivery_id) AS n FROM events WHERE edition_id IN (${q}) AND delivery_id IS NOT NULL AND type IN ('interested','book','showcase')`, ...ids),
+    anonIntents: n(`SELECT COUNT(*) AS n FROM events WHERE edition_id IN (${q}) AND delivery_id IS NULL AND type IN ('interested','book','showcase')`, ...ids),
     cta,
-    showcase: all(`SELECT value, COUNT(DISTINCT ${WHO}) AS n FROM events WHERE edition_id IN (${q}) AND type = 'showcase' GROUP BY value ORDER BY n DESC`, ...ids) as any,
+    showcase: all(`SELECT value, COUNT(DISTINCT delivery_id) AS n FROM events WHERE edition_id IN (${q}) AND delivery_id IS NOT NULL AND type = 'showcase' GROUP BY value ORDER BY n DESC`, ...ids) as any,
     unsubscribes: cta.unsubscribe || 0,
   };
 }

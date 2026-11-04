@@ -51,7 +51,7 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
         <div className="card kpi"><div className="v">{delivered}</div><div className="k">Delivered</div><div className="d">{byChannel.map((c) => `${({ email: 'email', whatsapp: 'WA API', wa_manual: 'WA manual' } as any)[c.channel] || c.channel} ${c.n}`).join(' · ') || '–'}{failed ? ` · ${failed} failed` : ''}</div></div>
         <div className="card kpi"><div className="v">{viewers}</div><div className="k">Opened the page</div><div className="d">{pct(viewers, delivered)} of delivered{anon ? ` · +${anon} views via shared link` : ''}</div></div>
         <div className="card kpi"><div className="v">{s50}</div><div className="k">Read past halfway</div><div className="d">{s100} reached the end{avgTime ? ` · avg ${avgTime}s on page` : ''}</div></div>
-        <div className="card kpi"><div className="v">{intents}</div><div className="k">People who showed interest</div><div className="d">{pct(intents, delivered)} of delivered · email opens {opens} (approximate)</div></div>
+        <div className="card kpi"><div className="v">{intents}</div><div className="k">People who showed interest</div><div className="d">{pct(intents, delivered)} of delivered{m.anonIntents ? ` · +${m.anonIntents} taps via shared link` : ''} · email opens {opens} (approximate)</div></div>
       </div>
       <div className="grid2">
         <section className="card"><h2>Buttons tapped</h2><p className="hint">Unique people per button.</p>

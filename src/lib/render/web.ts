@@ -148,7 +148,7 @@ ${ctx.preview ? '<meta name="robots" content="noindex">' : ''}
 <link rel="canonical" href="${esc(url)}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
-<style>:root{--ink:${v.ink};--acc:${v.acc};--soft:${v.soft};--on-ink:${onColor(v.ink)};--on-acc:${onColor(v.acc)};--acc-on-ink:${readableOn(v.acc, v.ink, 3)};--acc-text:${readableOn(v.acc, '#ffffff')};--acc-text-soft:${readableOn(v.acc, v.soft)};--acc-btn:${readableOn(v.acc, '#ffffff', 4.5)};--on-acc-btn:${onColor(readableOn(v.acc, '#ffffff', 4.5))};--paper:#fff;--page:#f3f4f6;--text:#20232a;--muted:#626a76;--line:#e3e6eb}${CSS}</style>
+<style>:root{--ink:${v.ink};--acc:${v.acc};--soft:${v.soft};--on-ink:${onColor(v.ink)};--on-acc:${onColor(v.acc)};--acc-on-ink:${readableOn(v.acc, v.ink, 4.5)};--acc-text:${readableOn(v.acc, '#ffffff')};--acc-text-soft:${readableOn(v.acc, v.soft)};--acc-btn:${readableOn(v.acc, '#ffffff', 4.5)};--on-acc-btn:${onColor(readableOn(v.acc, '#ffffff', 4.5))};--paper:#fff;--page:#f3f4f6;--text:#20232a;--muted:#626a76;--line:#e3e6eb}${CSS}</style>
 </head><body>
 ${ctx.preview ? '<div class="pv">Preview. Taps here are not recorded.</div>' : ''}
 <div class="wrap">

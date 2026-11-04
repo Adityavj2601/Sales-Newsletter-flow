@@ -1,4 +1,5 @@
 /* Small helpers for fetching and reading web pages without extra dependencies. */
+import { BlockList, isIPv4 } from 'node:net';
 
 export const UA = 'Mozilla/5.0 (compatible; BriefStudio/1.0; +https://github.com/)';
 
@@ -17,13 +18,15 @@ export async function assertPublicUrl(raw: string): Promise<URL> {
   return u;
 }
 function isPrivate(ip: string): boolean {
-  const v4 = ip.replace(/^::ffff:/i, '');
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) {
-    const [a, b] = v4.split('.').map(Number);
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
-  }
-  const x = ip.toLowerCase();
-  return x === '::' || x === '::1' || x.startsWith('fc') || x.startsWith('fd') || x.startsWith('fe80');
+  const bl = new BlockList();
+  for (const [net, bits] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 3]] as const) bl.addSubnet(net, bits, 'ipv4');
+  for (const [net, bits] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['64:ff9b::', 96]] as const) bl.addSubnet(net, bits, 'ipv6');
+  // IPv4-mapped/compatible IPv6 (e.g. ::ffff:7f00:1) is decoded and checked as IPv4 too.
+  const m = ip.toLowerCase().match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (m) { const a = parseInt(m[1], 16), b = parseInt(m[2], 16); return isPrivate(`${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`); }
+  const dotted = ip.replace(/^::ffff:/i, '');
+  if (isIPv4(dotted)) return bl.check(dotted, 'ipv4');
+  try { return bl.check(ip, 'ipv6'); } catch { return true; }
 }
 
 export async function fetchText(url: string, ms = 12000): Promise<{ status: number; text: string; finalUrl: string; type: string }> {

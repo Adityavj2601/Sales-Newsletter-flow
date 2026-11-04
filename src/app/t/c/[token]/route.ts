@@ -14,12 +14,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!allowed && d) {
     const e = get('SELECT e.content, e.slug, p.slug AS ps FROM editions e JOIN products p ON p.id = e.product_id WHERE e.id = ?', d.edition_id);
     const base = baseUrl(new URL(req.url).origin);
-    allowed = !!e && (String(e.content).includes(JSON.stringify(u).slice(1, -1)) || u.startsWith(`${base}/e/${e.ps}`));
+    let urls: string[] = [];
+    try {
+      const c = JSON.parse(e?.content || '{}');
+      urls = [...(c.sources || []).map((s: any) => s.url), ...(c.blocks || []).flatMap((b: any) => [b.url, b.mediaUrl])].filter(Boolean);
+    } catch { /* ignore */ }
+    allowed = !!e && (urls.includes(u) || u.startsWith(`${base}/e/${e.ps}/`) || u === `${base}/e/${e.ps}`);
   }
   if (!allowed) {
     const safe = u.replace(/[<>"&]/g, '');
     return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Leaving</title><body style="font:16px system-ui;margin:40px auto;max-width:520px;padding:0 16px"><p>This link points outside the newsletter:</p><p style="word-break:break-all"><b>${safe}</b></p><p><a href="${safe}" rel="noopener noreferrer nofollow">Continue</a></p></body>`, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
   }
-  if (!isBot(req.headers.get('user-agent'))) await track({ token: tok, type: 'click', value: u.slice(0, 300) }).catch(() => null);
+  if (req.method !== 'HEAD' && !isBot(req.headers.get('user-agent'))) await track({ token: tok, type: 'click', value: u.slice(0, 300) }).catch(() => null);
   return Response.redirect(u, 302);
 }

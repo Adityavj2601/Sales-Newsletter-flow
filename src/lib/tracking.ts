@@ -111,6 +111,7 @@ export async function addNote(eventId: string, token: string, note: string): Pro
   if (!ev || !d || ev.delivery_id !== d.id) return false;
   const text = note.trim().slice(0, 1000);
   if (!text) return false;
+  if (ev.meta && JSON.parse(ev.meta).note) return true; // one note per tap; re-posts don't alert again
   run('UPDATE events SET meta = ? WHERE id = ?', JSON.stringify({ ...(ev.meta ? JSON.parse(ev.meta) : {}), note: text }), eventId);
   let contact: any = null;
   if (ev.contact_id) {

@@ -41,7 +41,12 @@ async function handle(req: Request, params: Promise<{ token: string; action: str
   const bot = req.method === 'HEAD' || isBot(req.headers.get('user-agent'));
   let ev: any = null;
   if (!isTest && !bot) {
-    const value = action === 'poll' ? u.searchParams.get('v') : action === 'showcase' ? u.searchParams.get('k') : null;
+    let value = action === 'poll' ? u.searchParams.get('v') : action === 'showcase' ? u.searchParams.get('k') : null;
+    if (action === 'poll') {
+      let opts: string[] = [];
+      try { opts = (JSON.parse(ed?.content || '{}').blocks || []).filter((b: any) => b.type === 'poll' && (!u.searchParams.get('b') || b.id === u.searchParams.get('b'))).flatMap((b: any) => b.options || []); } catch { /* ignore */ }
+      if (!value || !opts.includes(value)) value = null;
+    }
     ev = await track({ token: token === '_' ? null : token, editionId: r.editionId, type: action, value, meta: action === 'poll' ? { block: u.searchParams.get('b') } : { via: 'link' } });
   }
   if (action === 'share') {

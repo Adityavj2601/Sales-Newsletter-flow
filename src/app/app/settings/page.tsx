@@ -51,7 +51,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
               <label className="f"><span>SMTP host</span><input className="in" name="host" defaultValue={s.host} placeholder="email-smtp.ap-south-1.amazonaws.com" /></label>
               <label className="f"><span>Port</span><input className="in" name="port" type="number" defaultValue={s.port} /></label>
               <label className="f"><span>Username</span><input className="in" name="user" defaultValue={s.user} autoComplete="off" /></label>
-              <label className="f"><span>Password {s.pass ? `(saved: ${mask(smtpPass())})` : ''}</span><input className="in" name="pass" type="password" autoComplete="new-password" placeholder={s.pass ? 'Leave empty to keep' : ''} /></label>
+              <label className="f"><span>Password {s.pass ? `(saved: ••••••••)` : ''}</span><input className="in" name="pass" type="password" autoComplete="new-password" placeholder={s.pass ? 'Leave empty to keep' : ''} /></label>
               <label className="f full"><span>Default From</span><input className="in" name="from" defaultValue={s.from} placeholder={'"Team Unada" <brief@news.unada.io>'} /><small>Each product can override the sender name and address in Products & brand.</small></label>
               <label className="check"><input type="checkbox" name="secure" defaultChecked={s.secure} /><span>Use SSL/TLS from the start (port 465)</span></label>
               {s.pass && <label className="check"><input type="checkbox" name="clear_pass" /><span>Remove saved password</span></label>}
@@ -77,7 +77,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             <form action={A.saveWA} className="card form-grid">
               <label className="f"><span>Phone number ID</span><input className="in" name="phoneNumberId" defaultValue={w.phoneNumberId} /></label>
               <label className="f"><span>WhatsApp Business Account ID</span><input className="in" name="wabaId" defaultValue={w.wabaId} /></label>
-              <label className="f"><span>Permanent access token {w.token ? `(saved: ${mask(waToken())})` : ''}</span><input className="in" name="token" type="password" autoComplete="new-password" placeholder={w.token ? 'Leave empty to keep' : ''} /></label>
+              <label className="f"><span>Permanent access token {w.token ? `(saved: ••••••••)` : ''}</span><input className="in" name="token" type="password" autoComplete="new-password" placeholder={w.token ? 'Leave empty to keep' : ''} /></label>
               <label className="f"><span>Meta App Secret {w.appSecret ? '(saved)' : ''}</span><input className="in" name="appSecret" type="password" autoComplete="new-password" placeholder={w.appSecret ? 'Leave empty to keep' : 'From Meta app → Settings → Basic'} /><small>Used to check that webhook calls really come from Meta.</small></label>
               <label className="f"><span>Graph API version</span><input className="in" name="apiVersion" defaultValue={w.apiVersion} /></label>
               <label className="f"><span>Template name</span><input className="in" name="templateName" defaultValue={w.templateName} placeholder="weekly_brief" /></label>

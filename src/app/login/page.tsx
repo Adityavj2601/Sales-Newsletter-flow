@@ -15,7 +15,8 @@ async function login(fd: FormData) {
   const email = String(fd.get('email') || '').trim().toLowerCase();
   const pw = String(fd.get('password') || '');
   const h = await headers();
-  const ip = (h.get('x-forwarded-for') || '').split(',')[0].trim() || h.get('x-real-ip') || 'local';
+  // Only trust proxy headers when told the app runs behind one (otherwise anyone can fake their IP).
+  const ip = process.env.TRUST_PROXY === '1' ? (h.get('x-forwarded-for') || '').split(',')[0].trim() || h.get('x-real-ip') || 'proxy' : 'direct';
   const keys = [`e:${email}`, `ip:${ip}`];
   const wait = loginBlocked(keys);
   if (wait) redirect(`/login?e=wait&s=${Math.ceil(wait / 1000)}`);

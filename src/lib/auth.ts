@@ -70,7 +70,9 @@ export function loginFailed(keys: string[]) {
   for (const k of keys) {
     const f = fails.get(k) && now - fails.get(k)!.first < 15 * 60_000 ? fails.get(k)! : { n: 0, until: 0, first: now };
     f.n++;
-    if (f.n >= 5) f.until = now + Math.min(15 * 60_000, 30_000 * 2 ** (f.n - 5));
+    // Per-IP: lock after 5 failures. Per-account: only after 10, and briefly, so strangers can't lock a real user out for long.
+    const limit = k.startsWith('e:') ? 10 : 5;
+    if (f.n >= limit) f.until = now + Math.min(k.startsWith('e:') ? 2 * 60_000 : 15 * 60_000, 30_000 * 2 ** (f.n - limit));
     fails.set(k, f);
   }
 }

@@ -1,7 +1,7 @@
 import type { Product } from '../settings';
 import type { Edition } from '../editions';
 import { CTA_LABELS, PILLARS, type Block } from '../types';
-import { esc, brandVars, onColor, youTubeId, hostOf, wordmark } from './common';
+import { esc, brandVars, onColor, readableOn, youTubeId, hostOf, wordmark } from './common';
 import { personalize, fmtDate } from '../format';
 import { baseUrl } from '../settings';
 import { linkSig, imgKey } from '../crypto';
@@ -12,7 +12,10 @@ export type EmailCtx = { token: string; firstName?: string } | null;
 export function renderEmail(e: Edition, p: Product, ctx: EmailCtx, opts: { base?: string; tz?: string } = {}): string {
   const base = opts.base || baseUrl();
   const c = e.content;
-  const v = brandVars(p);
+  const v0 = brandVars(p);
+  // Accent used as text must stay readable: darkened on white, adjusted on the brand colour.
+  const v = { ...v0, acc: readableOn(v0.acc, '#ffffff') };
+  const accOnInk = readableOn(v0.acc, v0.ink);
   const onInk = onColor(v.ink);
   const t = ctx?.token || '_';
   const web = `${base}/e/${p.slug}/${e.slug}${ctx ? `?r=${ctx.token}` : ''}`;
@@ -62,7 +65,7 @@ export function renderEmail(e: Edition, p: Product, ctx: EmailCtx, opts: { base?
   flush();
   const [w1, w2] = wordmark(p);
   const pre = personalize(c.preheader, { first_name: ctx?.firstName || '' });
-  const logo = p.brand.logoUrl ? `<img src="${esc(p.brand.logoUrl)}" height="28" alt="${esc(p.name)}" style="display:block;height:28px;border:0">` : `<span style="${F}font-size:17px;font-weight:bold;color:${onInk}">${esc(w1)}<span style="color:${v.acc}">${esc(w2)}</span></span>`;
+  const logo = p.brand.logoUrl ? `<img src="${esc(p.brand.logoUrl)}" height="28" alt="${esc(p.name)}" style="display:block;height:28px;border:0">` : `<span style="${F}font-size:17px;font-weight:bold;color:${onInk}">${esc(w1)}<span style="color:${accOnInk}">${esc(w2)}</span></span>`;
   const unsub = ctx ? `${base}/u/${ctx.token}?unsubscribe=1` : `${base}/u/_?p=${p.slug}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light only"><title>${esc(c.title)}</title>
 <style>a{color:${v.ink}}@media (max-width:620px){.wrap{width:100%!important}.pad{padding:18px!important}}</style></head>
@@ -72,7 +75,7 @@ export function renderEmail(e: Edition, p: Product, ctx: EmailCtx, opts: { base?
 <table role="presentation" class="wrap" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden">
 <tr><td style="padding:10px 28px;background:#ffffff;${F}font-size:12px;color:#6b7280;text-align:center">Charts and polls work best online. <a href="${esc(track(web))}" style="color:#6b7280">View the interactive version →</a></td></tr>
 <tr><td style="background:${v.ink};padding:16px 28px"><table role="presentation" width="100%"><tr><td>${logo}</td><td align="right" style="${MONO}font-size:11px;color:${onInk};opacity:.85">${esc(p.newsletter_name)}<br>Edition ${String(e.number).padStart(2, '0')} · ${esc(fmtDate(e.scheduled_at || e.planned_for || e.created_at, opts.tz))}</td></tr></table></td></tr>
-<tr><td class="pad" style="background:${v.ink};padding:22px 28px 28px">${c.kicker ? `<div style="${MONO}font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${v.acc}">${esc(c.kicker)}</div>` : ''}<h1 style="${SERIF}font-size:32px;line-height:1.12;color:${onInk};margin:10px 0 12px">${esc(c.title)}</h1>${c.dek ? `<p style="${F}font-size:16px;line-height:1.5;color:${onInk};opacity:.88;margin:0">${esc(c.dek)}</p>` : ''}<p style="${MONO}font-size:11px;color:${onInk};opacity:.7;margin:14px 0 0">${c.readMinutes} min read</p></td></tr>
+<tr><td class="pad" style="background:${v.ink};padding:22px 28px 28px">${c.kicker ? `<div style="${MONO}font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${accOnInk}">${esc(c.kicker)}</div>` : ''}<h1 style="${SERIF}font-size:32px;line-height:1.12;color:${onInk};margin:10px 0 12px">${esc(c.title)}</h1>${c.dek ? `<p style="${F}font-size:16px;line-height:1.5;color:${onInk};opacity:.88;margin:0">${esc(c.dek)}</p>` : ''}<p style="${MONO}font-size:11px;color:${onInk};opacity:.7;margin:14px 0 0">${c.readMinutes} min read</p></td></tr>
 ${parts.join('\n')}
 <tr><td style="padding:22px 28px;background:${v.soft};${F}font-size:12px;line-height:1.6;color:#6b7280">${esc(p.brand.signOff || `— The ${p.name} team`)}<br><br>You're receiving ${esc(p.newsletter_name)} from ${esc(p.name)} because you agreed to hear from us.${p.brand.address ? `<br>${esc(p.brand.address)}` : ''}<br><a href="${esc(track(`${base}/e/${p.slug}`))}" style="color:#6b7280">Past editions</a> · <a href="${esc(ctx ? `${base}/u/${ctx.token}` : unsub)}" style="color:#6b7280">Preferences</a> · <a href="${esc(unsub)}" style="color:#6b7280">Unsubscribe</a></td></tr>
 </table>

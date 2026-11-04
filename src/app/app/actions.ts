@@ -14,7 +14,7 @@ import { sampleContacts } from '@/lib/seed';
 import { importFromWebsite } from '@/lib/siteImport';
 import { normalizePhone, parseCSV } from '@/lib/csv';
 import { safeUrl } from '@/lib/types';
-const EMAIL = /^[^@\s"'<>(),;:\\]+@[^@\s"'<>(),;:\\]+\.[a-z]{2,}$/i;
+const EMAIL = /^[^@\s"<>(),;:\\]+@[^@\s"'<>(),;:\\]+\.[a-z]{2,}$/i;
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? '').trim();
 function back(path: string, msg: string): never {

@@ -37,7 +37,7 @@ export function parseCSV(text: string): string[][] {
 export function toCSV(rows: (string | number | null | undefined)[][]): string {
   return rows.map((r) => r.map((v) => {
     let s = v == null ? '' : String(v);
-    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; // stop spreadsheet formula injection
+    if (/^[=+\-@\t\r]/.test(s) && !/^\+?\d[\d\s-]{6,}$/.test(s)) s = `'${s}`; // stop spreadsheet formula injection (plain phone numbers are left alone)
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(',')).join('\r\n');
 }
