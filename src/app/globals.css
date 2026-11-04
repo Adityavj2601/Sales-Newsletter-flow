@@ -442,4 +442,4 @@ select.in, .switch select {
 [aria-busy="true"] { animation: skel-in 200ms var(--ease) 150ms backwards; }
 @keyframes skel-in { from { opacity: 0; } to { opacity: 1; } }
 /* One group-heading style for lists inside pages (Today/Earlier, sections, groups) */
-.group-title { font: 600 13px var(--f-ui); color: var(--muted); letter-spacing: 0; margin: 18px 4px 8px; }
+.group-title { font: 600 13px var(--f-ui); color: var(--muted); letter-spacing: 0; margin: 18px 0 8px; }
