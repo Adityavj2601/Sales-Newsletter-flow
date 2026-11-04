@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useFormStatus } from 'react-dom';
+import { useFormStatus, createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Icon } from './shell/icons';
 import { NAV, isActive } from './shell/nav';
@@ -51,14 +51,18 @@ export function Sheet({ open, onClose, title, children, width }: { open: boolean
     document.body.style.overflow = 'hidden';
     return () => { window.removeEventListener('keydown', k); document.body.style.overflow = prev; };
   }, [open, onClose]);
-  if (!open) return null;
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!open || !mounted) return null;
+  // Portal to <body>: animated ancestors (page transitions) would otherwise trap position:fixed.
+  return createPortal(
     <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} style={width ? { width: `min(${width}px, 100%)` } : undefined}>
         {title && <div className="row" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>{title}</h2><span className="spacer" /><button type="button" className="btn sm" onClick={onClose} aria-label="Close">✕</button></div>}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
