@@ -187,3 +187,17 @@ export function CloseOnNav() {
   }, []);
   return <div className="backdrop" onClick={() => setMenu(false)} aria-hidden="true" />;
 }
+/** Glass bars sit flush with the page at rest and gain their hairline only once content scrolls beneath them. */
+export function ScrollEdge() {
+  const path = usePathname();
+  useEffect(() => {
+    const root = document.documentElement;
+    let raf = 0;
+    const sync = () => { raf = 0; root.toggleAttribute('data-scrolled', window.scrollY > 2); };
+    const on = () => { if (!raf) raf = requestAnimationFrame(sync); };
+    sync();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => { window.removeEventListener('scroll', on); cancelAnimationFrame(raf); };
+  }, [path]);
+  return null;
+}

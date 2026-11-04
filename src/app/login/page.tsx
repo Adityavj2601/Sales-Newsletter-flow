@@ -45,8 +45,8 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
             <h1 id="auth-h">Sign in</h1>
             <p className="hint">Your weekly sales briefing, drafted and ready.</p>
           </div>
-          {sp.e === 'wait' ? <div className="notice bad" role="alert"><Icon name="warn" size={16} />Too many attempts. Try again in {sp.s || 'a few'} seconds.</div>
-            : sp.e ? <div className="notice bad" role="alert"><Icon name="warn" size={16} />That email and password don’t match. Try again.</div> : null}
+          {sp.e === 'wait' ? <div className="notice bad" role="alert"><span className="ni" aria-hidden>!</span><div>Too many attempts. Try again in {sp.s || 'a few'} seconds.</div></div>
+            : sp.e ? <div className="notice bad" role="alert"><span className="ni" aria-hidden>!</span><div>That email and password don’t match. Try again.</div></div> : null}
           <AuthField label="Email" name="email" kind="email" icon="mail" required autoComplete="email" autoFocus placeholder="you@company.com" />
           <AuthField label="Password" name="password" kind="password" icon="lock" required autoComplete="current-password" />
           <Submit className="btn primary lg" pending="Signing in…">Sign in</Submit>

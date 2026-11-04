@@ -2,7 +2,7 @@ import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
 import { JOB_INFO, CRON_PRESETS, ensureJobs } from '@/lib/jobs';
 import { getSetting } from '@/lib/settings';
-import { ago } from '@/lib/format';
+import { ago, fmtTime, fmtDay } from '@/lib/format';
 import { Icon } from '@/components/content/icons';
 import { JobCard, type JobView } from '@/components/content/jobs';
 import { saveJob, runJobNow } from '../actions';
@@ -19,8 +19,9 @@ const JOB_UI: Record<string, { icon: string; tone: string }> = {
 };
 const STATUS_LABEL: Record<string, string> = { ok: 'Succeeded', error: 'Failed', running: 'Running' };
 
-const ampm = (s: string) => s.replace(/\b(am|pm)\b/g, (m) => m.toUpperCase());
-const when = (iso: string, tz: string, opts: Intl.DateTimeFormatOptions) => ampm(new Date(iso).toLocaleString('en-IN', { timeZone: tz, ...opts }));
+const when = (iso: string, tz: string, opts: Intl.DateTimeFormatOptions) => new Date(iso).toLocaleString('en-IN', { timeZone: tz, ...opts });
+/** Old run logs can mention raw record IDs (“Edition ed_L0yi… finished”); readers never need those. */
+const tidy = (line: string) => line.replace(/\s*\b(ed|st|c|ct|u|p|kb|j|jr|src|s)_[A-Za-z0-9_-]{5,}\b/g, '').replace(/\s{2,}/g, ' ').trim();
 const dayKey = (iso: string, tz: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: tz });
 
 function duration(a: string, b?: string | null) {
@@ -42,7 +43,7 @@ export default async function Automations() {
     const ui = JOB_UI[j.type] || { icon: 'bolt', tone: 'gray' };
     return {
       id: j.id, label: info.label || j.name, help: info.help || '', icon: ui.icon, tone: ui.tone, cron: j.cron, enabled: !!j.enabled,
-      nextIso: j.next_run_at, nextLabel: j.next_run_at ? when(j.next_run_at, tz, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }) : '–',
+      nextIso: j.next_run_at, nextLabel: j.next_run_at ? `${fmtDay(j.next_run_at, tz)}, ${fmtTime(j.next_run_at, tz)}` : '–',
       lastAgo: ago(j.last_run_at), lastStatus: j.last_status,
       lastLabel: j.last_run_at ? `${STATUS_LABEL[j.last_status] || 'Ran'} ${ago(j.last_run_at)}` : 'Never run',
     };
@@ -59,9 +60,9 @@ export default async function Automations() {
   }
 
   return (
-    <div className="stack au" style={{ gap: 24 }}>
+    <div className="pg au">
       <div className="ph">
-        <div><div className="eyebrow">Runs by itself every week</div><h1>Automations</h1><p className="sub">Each job runs on its own schedule in {tz.replace('_', ' ')} time. Scheduled sends and the email queue are checked every minute while the app is running. Nothing is ever sent without your approval.</p></div>
+        <div><span className="eyebrow">Runs by itself every week</span><h1>Automations</h1><p className="sub">Each job runs on its own schedule in {tz.replace('_', ' ')} time. Scheduled sends and the email queue are checked every minute while the app is running. Nothing is ever sent without your approval.</p></div>
       </div>
 
       <div className="au-grid">
@@ -69,7 +70,7 @@ export default async function Automations() {
       </div>
 
       <section className="au-hist" aria-labelledby="au-hist-h">
-        <div className="au-hist-h"><h2 id="au-hist-h">Run history</h2><span className="hint">Last {runs.length} run{runs.length === 1 ? '' : 's'}. Tap one to see its log.</span></div>
+        <div className="au-hist-h"><h2 id="au-hist-h" className="section-title">Run history</h2><span className="hint">Last {runs.length} run{runs.length === 1 ? '' : 's'}. Tap one to see its log.</span></div>
         {days.length ? days.map((d) => (
           <div key={d.key} className="au-day">
             <h3 className="cx-group-h">{d.label}</h3>
@@ -79,7 +80,7 @@ export default async function Automations() {
                 const name = r.name || (r.type === 'send' ? 'Send queue' : r.type);
                 const dur = duration(r.started_at, r.finished_at);
                 const lines = String(r.log || '').split('\n').filter(Boolean);
-                const lastLine = (lines[lines.length - 1] || '').replace(/^\[[\d:]+\]\s*/, '');
+                const lastLine = tidy((lines[lines.length - 1] || '').replace(/^\[[\d:]+\]\s*/, ''));
                 return (
                   <li key={r.id} className={`au-tl-i ${r.status}`}>
                     <span className={`au-tl-dot ${r.status}`} aria-hidden>{r.status === 'ok' ? <Icon name="check" size={11} strokeWidth={3} /> : r.status === 'error' ? <Icon name="x" size={10} strokeWidth={3} /> : null}</span>
@@ -92,7 +93,7 @@ export default async function Automations() {
                           <span className={`au-st ${r.status}`}>{STATUS_LABEL[r.status] || r.status}</span>
                         </span>
                         <span className="au-tl-meta">
-                          <time dateTime={r.started_at}>{when(r.started_at, tz, { hour: 'numeric', minute: '2-digit', hour12: true })}</time>
+                          <time dateTime={r.started_at}>{fmtTime(r.started_at, tz)}</time>
                           {dur && <span> · {dur}</span>}
                           {lastLine && <span className="au-tl-last"> · {lastLine.slice(0, 90)}</span>}
                         </span>

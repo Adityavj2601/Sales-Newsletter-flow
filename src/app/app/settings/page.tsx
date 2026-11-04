@@ -7,6 +7,7 @@ import { MODEL_DEFAULTS, PROVIDER_LABEL, tokensThisMonth, routeFor } from '@/lib
 import { mask } from '@/lib/crypto';
 import { WEEKDAYS, num, fmtDate } from '@/lib/format';
 import { Submit, Copy, Confirm } from '@/components/ui';
+import { Avatar } from '@/components/bits';
 import { Icon, Tile } from '@/components/content/icons';
 import { Group, Row, Callout } from '@/components/content/grouped';
 import { SaveBar, SecretField, SettingsNav, BrandColors, MemberRow } from '@/components/content/controls';
@@ -39,8 +40,14 @@ export default async function Settings({ searchParams }: { searchParams: Promise
   const g = getSetting('general');
 
   return (
-    <div className="se">
-      <div className="ph se-ph"><div><h1>Settings</h1>{me.role !== 'admin' && <p className="sub">You’re an editor. Only admins can change products, AI keys, sending and alerts; you can change your own password here.</p>}</div></div>
+    <div className="pg se">
+      <div className="ph">
+        <div>
+          <span className="eyebrow">{g.appName} · {me.role === 'admin' ? 'Admin' : 'Editor'}</span>
+          <h1>Settings</h1>
+          <p className="sub">{me.role === 'admin' ? 'Products, connections, alerts and your team. Changes apply to every product unless a section says otherwise.' : 'You’re an editor. Only admins can change products, AI keys, sending and alerts; you can change your own password here.'}</p>
+        </div>
+      </div>
       <div className="se-shell">
         <SettingsNav items={TABS.map(({ key, label, icon, tone }) => ({ key, label, icon, tone }))} current={tab} />
         <div className="se-pane" key={tab}>
@@ -53,7 +60,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             <form action={A.saveGeneral} className="se-form">
               <Group title="App">
                 <Row label="App name"><input className="in" name="appName" defaultValue={g.appName} /></Row>
-                <Row label="Public web address" sub={<>Every link, preview image and tracking pixel uses this. Now <span className="mono">{baseUrl()}</span></>}>
+                <Row label="Public web address" sub={<>Every link, preview image and tracking pixel uses this. Now <b className="se-val">{baseUrl()}</b></>}>
                   <input className="in" name="publicBaseUrl" type="url" defaultValue={g.publicBaseUrl} placeholder="https://brief.yourdomain.com" />
                 </Row>
               </Group>
@@ -78,7 +85,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             const s = getSetting('smtp');
             return (
               <div className="se-stack">
-                <Callout icon="info">Use any SMTP service: Amazon SES, Brevo, Resend, Postmark (broadcast stream), Zoho, or Google Workspace for small lists. Send from a sub-domain like <code>news.yourdomain.com</code> with SPF, DKIM and DMARC set up, and warm it up slowly.</Callout>
+                <Callout icon="info">Use any SMTP service: Amazon SES, Brevo, Resend, Postmark (broadcast stream), Zoho, or Google Workspace for small lists. Send from a sub-domain like <b>news.yourdomain.com</b> with SPF, DKIM and DMARC set up, and warm it up slowly.</Callout>
                 <form action={A.saveSMTP} className="se-form">
                   <Group title="Server">
                     <Row label="SMTP host"><input className="in" name="host" defaultValue={s.host} placeholder="email-smtp.ap-south-1.amazonaws.com" /></Row>
@@ -118,24 +125,24 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                 <p className="se-fine"><Icon name="warn" size={13} />Never use unofficial bulk-sender tools; they get numbers banned.</p>
                 <form action={A.saveWA} className="se-form">
                   <Group title="Business account">
-                    <Row label="Phone number ID"><input className="in mono" name="phoneNumberId" defaultValue={w.phoneNumberId} /></Row>
-                    <Row label="Business Account ID" sub="WABA ID"><input className="in mono" name="wabaId" defaultValue={w.wabaId} /></Row>
+                    <Row label="Phone number ID"><input className="in" name="phoneNumberId" defaultValue={w.phoneNumberId} /></Row>
+                    <Row label="Business Account ID" sub="WABA ID"><input className="in" name="wabaId" defaultValue={w.wabaId} /></Row>
                     <Row as="div" label="Permanent access token"><SecretField name="token" clearName="clear_token" saved={!!w.token} label="WhatsApp access token" /></Row>
                     <Row as="div" label="Meta App Secret" sub="From Meta app → Settings → Basic. Checks that webhook calls really come from Meta."><SecretField name="appSecret" saved={!!w.appSecret} label="Meta App Secret" /></Row>
-                    <Row label="Graph API version"><input className="in mono se-num" name="apiVersion" defaultValue={w.apiVersion} /></Row>
+                    <Row label="Graph API version"><input className="in se-num" name="apiVersion" defaultValue={w.apiVersion} /></Row>
                   </Group>
                   <Group title="Message template">
-                    <Row label="Template name"><input className="in mono" name="templateName" defaultValue={w.templateName} placeholder="weekly_brief" /></Row>
-                    <Row label="Language"><input className="in mono se-num" name="templateLang" defaultValue={w.templateLang} placeholder="en" /></Row>
-                    <Row label="Body variables, in order" sub={<>From first_name, title, dek, link, newsletter. Must match {'{{1}}, {{2}}…'} in your template.</>}><input className="in mono" name="bodyParams" defaultValue={w.bodyParams} /></Row>
-                    <Row label="Buttons" sub={<>URL buttons: set the template URL to <span className="mono">{baseUrl()}/e/{'{{1}}'}</span></>}>
+                    <Row label="Template name"><input className="in" name="templateName" defaultValue={w.templateName} placeholder="weekly_brief" /></Row>
+                    <Row label="Language"><input className="in se-num" name="templateLang" defaultValue={w.templateLang} placeholder="en" /></Row>
+                    <Row label="Body variables, in order" sub={<>From first_name, title, dek, link, newsletter. Must match {'{{1}}, {{2}}…'} in your template.</>}><input className="in" name="bodyParams" defaultValue={w.bodyParams} /></Row>
+                    <Row label="Buttons" sub={<>URL buttons: set the template URL to <span className="se-val">{baseUrl()}/e/{'{{1}}'}</span></>}>
                       <select className="in" name="button" defaultValue={w.button}><option value="quick_reply">Interested / Not right now</option><option value="url">One URL button</option><option value="none">No buttons</option></select>
                     </Row>
                     <Row label="Image header" sub="We send the edition’s preview image."><input type="checkbox" role="switch" className="toggle" name="headerImage" defaultChecked={w.headerImage} /></Row>
                   </Group>
                   <Group title="Webhook" footer="In Meta’s app settings, paste these and subscribe to the “messages” field. Used for delivery status and button taps.">
-                    <Row as="div" label="Callback URL"><span className="se-copy"><code>{hook}</code><Copy text={hook} /></span></Row>
-                    <Row as="div" label="Verify token"><span className="se-copy"><code>{w.verifyToken || 'Created on first save'}</code>{w.verifyToken && <Copy text={w.verifyToken} />}<input type="hidden" name="verifyToken" value={w.verifyToken} /></span></Row>
+                    <Row as="div" label="Callback URL"><span className="se-copy"><span className="se-code">{hook}</span><Copy text={hook} /></span></Row>
+                    <Row as="div" label="Verify token"><span className="se-copy"><span className="se-code">{w.verifyToken || 'Created on first save'}</span>{w.verifyToken && <Copy text={w.verifyToken} />}<input type="hidden" name="verifyToken" value={w.verifyToken} /></span></Row>
                   </Group>
                   <Group title="Check">
                     <Row as="div" label="Send a test message" sub="Uses the saved settings. Save first."><TestButton what="wa" label="Send test" needsInput="+91 98xxx xxxxx" /></Row>
@@ -174,12 +181,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                   <ul className="cx-group-box se-members">
                     {users.map((u) => {
                       const manage = u.id !== me.id && me.role === 'admin';
-                      const initials = String(u.name || u.email).split(/\s+/).map((x: string) => x[0]).join('').slice(0, 2).toUpperCase();
-                      const hue = [...String(u.email)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
                       return (
                         <MemberRow key={u.id} name={u.name}
                           top={<>
-                            <span className="se-avatar" style={{ ['--h' as any]: hue }} aria-hidden>{initials}</span>
+                            <Avatar name={u.name || String(u.email).split('@')[0]} size={36} />
                             <span className="se-member-i"><b>{u.name}{u.id === me.id && <span className="se-you">You</span>}</b><small>{u.email} · added {fmtDate(u.created_at)}</small></span>
                             <span className={`pill ${u.role === 'admin' ? 'info' : ''}`}>{u.role === 'admin' ? 'Admin' : 'Editor'}</span>
                           </>}
@@ -213,7 +218,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                     <Row label="Current password"><input className="in" name="current" type="password" required autoComplete="current-password" /></Row>
                     <Row label="New password" sub="At least 8 characters."><input className="in" name="password" type="password" minLength={8} required autoComplete="new-password" /></Row>
                   </Group>
-                  <div className="se-actions"><Submit>Change password</Submit></div>
+                  <div className="se-actions"><Submit className="btn">Change password</Submit></div>
                 </form>
               </div>
             );
@@ -237,11 +242,11 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                   ))}
                 </div>
               </section>
-              <Group title="Storage" footer={<>The SQLite database, uploads and the encryption key all live here. Back up this folder: without <code>secret.key</code> (or APP_SECRET) saved API keys can’t be decrypted.</>}>
-                <Row as="div" label="Data folder"><span className="se-copy"><code>{DATA_DIR}</code><Copy text={DATA_DIR} /></span></Row>
+              <Group title="Storage" footer={<>The SQLite database, uploads and the encryption key all live here. Back up this folder: without the secret.key file (or APP_SECRET) saved API keys can’t be decrypted.</>}>
+                <Row as="div" label="Data folder"><span className="se-copy"><span className="se-code">{DATA_DIR}</span><Copy text={DATA_DIR} /></span></Row>
               </Group>
-              <Group title="Scheduler" footer={<>The app checks jobs and the send queue every minute while it runs. If your host sleeps (serverless), set <code>CRON_KEY</code> and call this address every minute from a cron service.</>}>
-                <Row as="div" label="External cron URL"><span className="se-copy"><code>{baseUrl()}/api/cron?key=YOUR_CRON_KEY</code><Copy text={`${baseUrl()}/api/cron?key=YOUR_CRON_KEY`} /></span></Row>
+              <Group title="Scheduler" footer={<>The app checks jobs and the send queue every minute while it runs. If your host sleeps (serverless), set CRON_KEY and call this address every minute from a cron service.</>}>
+                <Row as="div" label="External cron URL"><span className="se-copy"><span className="se-code">{baseUrl()}/api/cron?key=YOUR_CRON_KEY</span><Copy text={`${baseUrl()}/api/cron?key=YOUR_CRON_KEY`} /></span></Row>
               </Group>
             </div>
           )}
@@ -258,7 +263,7 @@ async function ProductsTab({ sel, showNew }: { sel?: string; showNew: boolean })
   const host = (p?.website || 'yourdomain.com').replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '');
   return (
     <div className="se-stack">
-      <nav className="cx-seg se-prods" aria-label="Products">
+      <nav className="tabs se-prods" aria-label="Products">
         {products.map((x) => <Link key={x.id} href={`/app/settings?tab=products&p=${x.id}`} aria-current={x.id === p?.id ? 'page' : undefined} scroll={false}>{x.name}</Link>)}
         <Link href={`/app/settings?tab=products${p ? `&p=${p.id}` : ''}&new=1#new-product`} className="se-prods-add" aria-label="Add a product"><Icon name="plus" size={14} strokeWidth={2.2} />New</Link>
       </nav>
@@ -269,7 +274,7 @@ async function ProductsTab({ sel, showNew }: { sel?: string; showNew: boolean })
             <Row label="Product name"><input className="in" name="name" defaultValue={p.name} /></Row>
             <Row label="Website"><input className="in" name="website" type="url" defaultValue={p.website} placeholder="https://" /></Row>
             <Row label="Newsletter name"><input className="in" name="newsletter_name" defaultValue={p.newsletter_name} /></Row>
-            <Row label="Link name" sub={<span className="mono">{baseUrl()}/e/{p.slug}/…</span>}><input className="in mono" name="slug" defaultValue={p.slug} /></Row>
+            <Row label="Link name" sub={<span className="se-val">{baseUrl()}/e/{p.slug}/…</span>}><input className="in" name="slug" defaultValue={p.slug} /></Row>
             <Row label="Tagline"><input className="in" name="tagline" defaultValue={p.brand.tagline} placeholder="Weekly briefing for sales teams" /></Row>
           </Group>
           <Group title="Voice" footer="The AI reads all of this before it writes a draft.">
@@ -317,7 +322,7 @@ async function ProductsTab({ sel, showNew }: { sel?: string; showNew: boolean })
           <input type="hidden" name="id" value={p.id} />
           <Group title="Danger zone" className="se-danger">
             <Row as="div" label={`Delete ${p.name}`} sub="Removes all its editions, contacts and results. This can’t be undone. Type DELETE to confirm.">
-              <span className="se-pair"><input className="in mono" name="confirm" aria-label="Type DELETE to confirm" placeholder="DELETE" autoComplete="off" /><button className="btn danger">Delete product</button></span>
+              <span className="se-pair"><input className="in" name="confirm" aria-label="Type DELETE to confirm" placeholder="DELETE" autoComplete="off" /><button className="btn danger">Delete product</button></span>
             </Row>
           </Group>
         </form>
@@ -361,7 +366,7 @@ function AiTab() {
                 <span className="cx-row-l"><span className="cx-row-t">{l}</span><small className="cx-row-s">{h}</small><small className="se-now"><span className={`dot ${now ? 'on' : ''}`} />{now ? `${PROVIDER_LABEL[now.provider]} · ${now.model}` : 'Demo mode'}</small></span>
                 <span className="cx-row-c se-pair">
                   <select className="in" aria-label={`Provider for ${l}`} name={`route_${t}`} defaultValue={r.provider}><option value="auto">Auto</option>{PROVIDERS.map((pv) => <option key={pv} value={pv}>{PROVIDER_LABEL[pv]}</option>)}</select>
-                  <input className="in mono" aria-label={`Model for ${l}`} name={`model_${t}`} defaultValue={r.model} placeholder="Default model" list={`models-${t}`} />
+                  <input className="in" aria-label={`Model for ${l}`} name={`model_${t}`} defaultValue={r.model} placeholder="Default model" list={`models-${t}`} />
                   <datalist id={`models-${t}`}>{PROVIDERS.flatMap((pv) => MODEL_DEFAULTS[pv].suggestions).map((m) => <option key={m} value={m} />)}</datalist>
                 </span>
               </div>
@@ -381,7 +386,7 @@ function AiTab() {
         <h3 className="cx-group-h">This month’s usage</h3>
         {usage.length ? (
           <div className="cx-group-box se-usage"><table className="tbl"><thead><tr><th>Provider</th><th>Model</th><th>Task</th><th className="num">Calls</th><th className="num">Input</th><th className="num">Output</th><th className="num">Errors</th></tr></thead>
-            <tbody>{usage.map((u, i) => <tr key={i}><td>{PROVIDER_LABEL[u.provider as keyof typeof PROVIDER_LABEL] || u.provider}</td><td className="mono">{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div>
+            <tbody>{usage.map((u, i) => <tr key={i}><td>{PROVIDER_LABEL[u.provider as keyof typeof PROVIDER_LABEL] || u.provider}</td><td>{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div>
         ) : <div className="cx-group-box"><div className="cx-row"><span className="cx-row-l"><span className="cx-row-s">No AI calls yet this month. Drafts run in demo mode until a key is connected.</span></span></div></div>}
       </section>
     </div>

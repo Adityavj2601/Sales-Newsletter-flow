@@ -4,7 +4,7 @@ import { activeProduct } from '@/lib/context';
 import { listProducts, getSetting } from '@/lib/settings';
 import { get } from '@/lib/db';
 import { seedProducts } from '@/lib/seed';
-import { Nav, ProductSwitch, Flash, MobileToggle, CloseOnNav, MenuClose } from '@/components/ui';
+import { Nav, ProductSwitch, Flash, MobileToggle, CloseOnNav, MenuClose, ScrollEdge } from '@/components/ui';
 import { CommandPalette, PaletteButton } from '@/components/shell/CommandPalette';
 import { Icon } from '@/components/shell/icons';
 import { Avatar } from '@/components/bits';
@@ -55,7 +55,7 @@ export default async function StudioLayout({ children }: { children: React.React
         <main className="main" id="main">{children}</main>
       </div>
       <CommandPalette products={plist} current={p?.id} switchAction={switchProduct} logoutAction={logout} />
-      <Suspense><Flash /><CloseOnNav /></Suspense>
+      <Suspense><Flash /><CloseOnNav /><ScrollEdge /></Suspense>
     </div>
   );
 }

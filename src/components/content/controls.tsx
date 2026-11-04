@@ -47,7 +47,7 @@ export function SecretField({ name, clearName, saved, masked = '•••••�
   if (mode === 'view') {
     return (
       <span ref={box} className="cx-secret">
-        <span className="cx-secret-v" title="Saved and encrypted"><Icon name="lock" size={14} /><span className="mono">{masked}</span></span>
+        <span className="cx-secret-v" title="Saved and encrypted"><Icon name="lock" size={14} /><span className="cx-mask">{masked}</span></span>
         <button type="button" className="btn sm" onClick={() => go('edit')} aria-label={`Replace ${label}`}>Replace</button>
         {clearName && <button type="button" className="btn sm ghost cx-danger-text" onClick={() => go('remove')} aria-label={`Remove ${label}`}>Remove</button>}
       </span>
@@ -64,7 +64,7 @@ export function SecretField({ name, clearName, saved, masked = '•••••�
   }
   return (
     <span ref={box} className="cx-secret editing">
-      <input ref={input} className="in mono" type="password" name={name} autoComplete="new-password" aria-label={label} placeholder={placeholder || (saved ? 'Paste a new value' : '')} />
+      <input ref={input} className="in" type="password" name={name} autoComplete="new-password" aria-label={label} placeholder={placeholder || (saved ? 'Paste a new value' : '')} />
       {saved && <button type="button" className="btn sm ghost" onClick={() => go('view')}>Cancel</button>}
     </span>
   );
@@ -158,7 +158,7 @@ export function BrandColors({ primary, accent, soft, newsletter, tagline, logo }
           <label key={k} className="cx-row">
             <span className="cx-row-l"><span className="cx-row-t">{l}</span><small className="cx-row-s">{s}</small></span>
             <span className="cx-row-c se-sw">
-              <span className="mono">{c[k].toUpperCase()}</span>
+              <span className="se-hex tnum">{c[k].toUpperCase()}</span>
               <input type="color" className="se-swatch" name={k} value={c[k]} aria-label={`${l} colour`} onChange={(e) => setC({ ...c, [k]: e.target.value })} />
             </span>
           </label>

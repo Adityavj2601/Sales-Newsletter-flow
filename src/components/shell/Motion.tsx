@@ -1,25 +1,36 @@
 'use client';
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { ago } from '@/lib/format';
+import { Ticker } from '@/components/people/Ticker';
 
-const reduced = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/**
+ * A KPI number that only animates when it changed since this browser last saw it: it rolls from the old
+ * value to the new one, once. Revisits with the same value render still. Uses the app's one Ticker.
+ */
+export function SeenNumber({ id, value }: { id: string; value: number }) {
+  const [from, setFrom] = useState<number | null | undefined>(undefined);
+  useEffect(() => {
+    const key = `seen:${id}`;
+    let prev: number | null = null;
+    try {
+      const v = localStorage.getItem(key);
+      prev = v == null ? null : Number(v);
+      localStorage.setItem(key, String(value));
+    } catch { /* storage blocked: just show the number */ }
+    setFrom(prev != null && Number.isFinite(prev) && prev !== value ? prev : null);
+  }, [id, value]);
+  if (from == null) return <span className="tick">{value.toLocaleString('en-IN')}</span>;
+  return <Ticker key={`${from}-${value}`} value={value} from={from} duration={700} />;
+}
 
-/** Number that counts up once on first paint. The server renders the final value, so it reads correctly without JS. */
-export function CountUp({ value, duration = 900 }: { value: number; duration?: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || reduced() || value <= 0) return;
-    const fmt = new Intl.NumberFormat('en-IN');
-    const t0 = performance.now();
-    let raf = 0;
-    const tick = (t: number) => {
-      const k = Math.min(1, (t - t0) / duration);
-      el.textContent = fmt.format(Math.round(value * (1 - Math.pow(1 - k, 4))));
-      if (k < 1) raf = requestAnimationFrame(tick);
-    };
-    el.textContent = fmt.format(0);
-    raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); el.textContent = fmt.format(Math.round(value)); };
-  }, [value, duration]);
-  return <span ref={ref}>{Math.round(value).toLocaleString('en-IN')}</span>;
+/** Relative time (“4 min ago”) that keeps itself current. Tabular digits, so it never jitters. */
+export function Ago({ iso, className, title }: { iso: string | null | undefined; className?: string; title?: string }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!iso) return;
+    const t = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, [iso]);
+  if (!iso) return <span className={className}>never</span>;
+  return <time dateTime={iso} className={`tnum${className ? ` ${className}` : ''}`} title={title} suppressHydrationWarning>{ago(iso)}</time>;
 }

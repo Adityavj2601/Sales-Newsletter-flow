@@ -2,7 +2,7 @@
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function clock(h: number, m: number) {
-  const ap = h >= 12 ? 'PM' : 'AM';
+  const ap = h >= 12 ? 'pm' : 'am';
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m).padStart(2, '0')} ${ap}`;
 }
