@@ -4,28 +4,65 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 
+/** Toast: reads ?msg= set by server actions, shows a glass toast that slides in and fades out. */
 export function Flash() {
   const sp = useSearchParams();
   const router = useRouter();
   const path = usePathname();
   const msg = sp.get('msg');
   const [shown, setShown] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   useEffect(() => {
     if (!msg) return;
     setShown(msg);
+    setLeaving(false);
     const q = new URLSearchParams(sp.toString());
     q.delete('msg');
     router.replace(`${path}${q.toString() ? `?${q}` : ''}`, { scroll: false });
-    const t = setTimeout(() => setShown(null), 5000);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => setLeaving(true), 4200);
+    const t2 = setTimeout(() => setShown(null), 4450);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [msg]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown) return null;
-  return <div className="flash" role="status" onClick={() => setShown(null)}>{shown}</div>;
+  const bad = /^(fail|could|can’t|can't|not |only |that |a valid|“|too |unknown|enter|add an|pick|type|give)/i.test(shown);
+  return (
+    <div className="toast-host" role="status" aria-live="polite">
+      <div className={`toast ${leaving ? 'out' : ''}`} onClick={() => setLeaving(true)}>
+        <span aria-hidden style={{ width: 20, height: 20, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, flex: 'none', background: bad ? 'var(--bad-bg)' : 'var(--ok-bg)', color: bad ? 'var(--bad)' : 'var(--ok)' }}>{bad ? '!' : '✓'}</span>
+        <span>{shown}</span>
+      </div>
+    </div>
+  );
+}
+
+export function Spinner({ size = 16 }: { size?: number }) {
+  return <span className="spin" style={{ width: size, height: size }} aria-hidden />;
+}
+
+/** Modal sheet: slides up with a spring, closes on backdrop click or Escape. */
+export function Sheet({ open, onClose, title, children, width }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode; width?: number }) {
+  useEffect(() => {
+    if (!open) return;
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', k);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', k); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} style={width ? { width: `min(${width}px, 100%)` } : undefined}>
+        {title && <div className="row" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>{title}</h2><span className="spacer" /><button type="button" className="btn sm" onClick={onClose} aria-label="Close">✕</button></div>}
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function Submit({ children, className = 'btn primary', pending = 'Working…', ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { pending?: string }) {
   const { pending: p } = useFormStatus();
-  return <button type="submit" className={className} disabled={p || rest.disabled} {...rest}>{p ? pending : children}</button>;
+  return <button type="submit" className={className} disabled={p || rest.disabled} aria-busy={p} {...rest}>{p ? <><Spinner size={14} />{pending}</> : children}</button>;
 }
 
 export function Copy({ text, label = 'Copy', className = 'btn sm' }: { text: string; label?: string; className?: string }) {
