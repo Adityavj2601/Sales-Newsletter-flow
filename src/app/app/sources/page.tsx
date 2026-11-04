@@ -2,7 +2,7 @@ import { all } from '@/lib/db';
 import { requireProduct } from '@/lib/context';
 import { fmtDate } from '@/lib/format';
 import { gnewsUrl } from '@/lib/ingest';
-import { Icon, Tile } from '@/components/content/icons';
+import { Icon } from '@/components/content/icons';
 import { Ago } from '@/components/shell/Motion';
 import { SourceForm, SourceSwitch, SourceMenu } from '@/components/content/sources';
 import { addSource, toggleSource, deleteSource } from '../actions';
@@ -39,18 +39,13 @@ export default async function Sources() {
   const active = rows.filter((r) => r.active).length;
   const failing = rows.filter((r) => r.active && r.last_error).length;
   const groups = [
-    { kind: 'gnews', title: 'Google News searches', icon: 'search', tone: 'blue' },
-    { kind: 'rss', title: 'RSS feeds', icon: 'rss', tone: 'orange' },
+    { kind: 'gnews', title: 'Google News searches' },
+    { kind: 'rss', title: 'RSS feeds' },
   ];
   return (
     <div className="pg so">
       <div className="ph">
-        <div><span className="eyebrow">Where stories come from</span><h1>News sources</h1><p className="sub">Google News searches (India edition, last 7 days) and RSS feeds. The “Fetch news” automation reads every active source each morning. Sources are shared by every product unless marked otherwise.</p></div>
-        <div className="so-sum" aria-label="Source summary">
-          <span><b>{active}</b> active</span>
-          <span><b>{rows.length - active}</b> paused</span>
-          <span className={failing ? 'bad' : ''}><b>{failing}</b> failing</span>
-        </div>
+        <div><span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span><h1>News sources</h1><p className="sub">{rows.length > 0 && <>{active} active{rows.length - active ? `, ${rows.length - active} paused` : ''}{failing ? <>, <span className="so-failing">{failing} failing</span></> : ''}. </>}Google News searches (India edition, last 7 days) and RSS feeds. The “Fetch news” automation reads every active source each morning. Sources are shared by every product unless marked otherwise.</p></div>
       </div>
 
       <SourceForm action={addSource} productName={p.name} />
@@ -60,7 +55,7 @@ export default async function Sources() {
         if (!list.length) return null;
         return (
           <section key={g.kind} className="cx-group so-group">
-            <h2 className="cx-group-h"><Tile icon={g.icon} tone={g.tone} size="sm" />{g.title}<span className="cx-group-n">{list.length}</span></h2>
+            <h2 className="group-title">{g.title}<span className="cx-group-n">{list.length}</span></h2>
             <ul className="cx-group-box so-list">
               {list.map((r) => {
                 const state = !r.active ? 'off' : r.last_error ? 'bad' : r.last_fetched_at ? 'ok' : 'idle';

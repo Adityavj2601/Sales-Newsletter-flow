@@ -5,7 +5,7 @@ import { activeProduct } from '@/lib/context';
 import { getSetting, listProducts, providerKey, PROVIDERS, baseUrl } from '@/lib/settings';
 import { MODEL_DEFAULTS, PROVIDER_LABEL, tokensThisMonth, routeFor } from '@/lib/ai/providers';
 import { mask } from '@/lib/crypto';
-import { WEEKDAYS, num, fmtDate } from '@/lib/format';
+import { WEEKDAYS, num, fmtDate, fmtTime } from '@/lib/format';
 import { Submit, Copy, Confirm } from '@/components/ui';
 import { Avatar } from '@/components/bits';
 import { Icon, Tile } from '@/components/content/icons';
@@ -29,6 +29,13 @@ const ALL_TABS = [
 ];
 const TASKS = [['draft', 'Write editions', 'Your best writing model'], ['edit', 'Copilot edits', 'Usually the same as writing'], ['fast', 'Score stories & subject lines', 'A fast, inexpensive model'], ['factcheck', 'Fact check', 'Auto picks a different company from the writer']] as const;
 const PROVIDER_MARK: Record<string, string> = { anthropic: 'A', openai: 'O', gemini: 'G', openrouter: 'OR' };
+/** "10:00" → "10:00 am", the way times read everywhere else in the app. */
+const clock = (hhmm: string) => fmtTime(`2000-01-01T${hhmm.padStart(5, '0')}:00Z`, 'UTC');
+/** Send times on the half hour, plus the saved one if it is off the grid. */
+const times = (cur: string) => {
+  const list = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+  return /^\d{2}:\d{2}$/.test(cur) && !list.includes(cur) ? [...list, cur].sort() : list;
+};
 const KEY_HINT: Record<string, string> = { anthropic: 'sk-ant-…', openai: 'sk-…', gemini: 'AIza…', openrouter: 'sk-or-…' };
 
 export default async function Settings({ searchParams }: { searchParams: Promise<{ tab?: string; p?: string; new?: string }> }) {
@@ -43,7 +50,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
     <div className="pg se">
       <div className="ph">
         <div>
-          <span className="eyebrow">{g.appName} · {me.role === 'admin' ? 'Admin' : 'Editor'}</span>
+          <span className="eyebrow">{g.appName}</span>
           <h1>Settings</h1>
           <p className="sub">{me.role === 'admin' ? 'Products, connections, alerts and your team. Changes apply to every product unless a section says otherwise.' : 'You’re an editor. Only admins can change products, AI keys, sending and alerts; you can change your own password here.'}</p>
         </div>
@@ -69,7 +76,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                 <Row as="div" label="Default send slot" sub="New editions are planned for this day and time.">
                   <span className="se-pair">
                     <select className="in" name="sendDay" aria-label="Default send day" defaultValue={g.sendDay}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
-                    <input className="in" name="sendTime" type="time" aria-label="Default send time" defaultValue={g.sendTime} />
+                    <select className="in" name="sendTime" aria-label="Default send time" defaultValue={g.sendTime}>{times(g.sendTime).map((t) => <option key={t} value={t}>{clock(t)}</option>)}</select>
                   </span>
                 </Row>
                 <Row label="Emails per minute" sub="Sending pace, 1–600."><input className="in se-num" name="emailsPerMinute" type="number" min={1} max={600} defaultValue={g.emailsPerMinute} /></Row>
@@ -301,7 +308,7 @@ async function ProductsTab({ sel, showNew }: { sel?: string; showNew: boolean })
             <Row label="“Book 15 min” link" sub="Name and email are pre-filled for the reader."><input className="in" name="bookingUrl" type="url" defaultValue={p.brand.bookingUrl} placeholder="https://calendly.com/…" /></Row>
             <Row label="Sales alert email" sub="For this product only."><input className="in" name="alertEmail" type="email" defaultValue={p.brand.alertEmail} /></Row>
           </Group>
-          <SaveBar label={`Save ${p.name}`} />
+          <SaveBar scope={`${p.name}’s settings`} />
         </form>
       )}
 
@@ -380,15 +387,15 @@ function AiTab() {
             <span className="cx-row-c">{limit ? <span className={`se-meter ${pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : ''}`} role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Share of monthly token limit used"><i style={{ width: `${Math.max(pct, 1)}%` }} /></span> : <span className="hint">No limit set</span>}</span>
           </div>
         </Group>
-        <SaveBar label="Save AI settings" />
+        <section className="cx-group">
+          <h3 className="cx-group-h">This month’s usage</h3>
+          {usage.length ? (
+            <div className="cx-group-box se-usage"><table className="tbl"><thead><tr><th>Provider</th><th>Model</th><th>Task</th><th className="num">Calls</th><th className="num">Input</th><th className="num">Output</th><th className="num">Errors</th></tr></thead>
+              <tbody>{usage.map((u, i) => <tr key={i}><td>{PROVIDER_LABEL[u.provider as keyof typeof PROVIDER_LABEL] || u.provider}</td><td>{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div>
+          ) : <div className="cx-group-box"><div className="cx-row"><span className="cx-row-l"><span className="cx-row-s">No AI calls yet this month. Drafts run in demo mode until a key is connected.</span></span></div></div>}
+        </section>
+        <SaveBar />
       </form>
-      <section className="cx-group">
-        <h3 className="cx-group-h">This month’s usage</h3>
-        {usage.length ? (
-          <div className="cx-group-box se-usage"><table className="tbl"><thead><tr><th>Provider</th><th>Model</th><th>Task</th><th className="num">Calls</th><th className="num">Input</th><th className="num">Output</th><th className="num">Errors</th></tr></thead>
-            <tbody>{usage.map((u, i) => <tr key={i}><td>{PROVIDER_LABEL[u.provider as keyof typeof PROVIDER_LABEL] || u.provider}</td><td>{u.model}</td><td>{u.task}</td><td className="num">{u.calls}</td><td className="num">{num(u.i || 0)}</td><td className="num">{num(u.o || 0)}</td><td className="num">{u.errs || ''}</td></tr>)}</tbody></table></div>
-        ) : <div className="cx-group-box"><div className="cx-row"><span className="cx-row-l"><span className="cx-row-s">No AI calls yet this month. Drafts run in demo mode until a key is connected.</span></span></div></div>}
-      </section>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useFormStatus, createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Icon } from './shell/icons';
 import { NAV, isActive } from './shell/nav';
+import { guardedNav } from './shell/navGuard';
 
 /** Toast: reads ?msg= set by server actions, shows a glass toast that slides in and fades out. */
 export function Flash() {
@@ -97,8 +98,23 @@ export function Confirm({ action, label, confirmLabel = 'Yes, do it', className 
 
 /* ---------- Shell: sidebar navigation, product switcher, mobile drawer ---------- */
 
+/** True while the editor has collapsed the sidebar into an icon rail (it puts `ed-route` on <body>). */
+function useRail() {
+  const [rail, setRail] = useState(false);
+  useEffect(() => {
+    const b = document.body;
+    const sync = () => setRail(b.classList.contains('ed-route'));
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(b, { attributes: true, attributeFilter: ['class'] });
+    return () => mo.disconnect();
+  }, []);
+  return rail;
+}
+
 export function Nav({ counts }: { counts: Record<string, number> }) {
   const path = usePathname();
+  const rail = useRail();
   const ref = useRef<HTMLElement>(null);
   const [ind, setInd] = useState<{ y: number; h: number; ready: boolean } | null>(null);
   // One highlight that glides between items (macOS source-list feel) instead of each link fading on its own.
@@ -107,7 +123,7 @@ export function Nav({ counts }: { counts: Record<string, number> }) {
     const a = nav?.querySelector<HTMLElement>('a[aria-current="page"]');
     if (!nav || !a) { setInd(null); return; }
     setInd((prev) => ({ y: a.offsetTop, h: a.offsetHeight, ready: !!prev }));
-  }, [path]);
+  }, [path, rail]);
   return (
     <nav className="nav" aria-label="Main" ref={ref}>
       {ind && <span className={`nav-ind${ind.ready ? ' ready' : ''}`} style={{ transform: `translateY(${ind.y}px)`, height: ind.h }} aria-hidden />}
@@ -116,8 +132,9 @@ export function Nav({ counts }: { counts: Record<string, number> }) {
           <div className="grp" aria-hidden>{g.grp}</div>
           {g.items.map((n) => {
             const c = n.key ? counts[n.key] : 0;
+            const name = `${n.label}${c ? `, ${c > 99 ? '99+' : c} new` : ''}`;
             return (
-              <Link key={n.href} href={n.href} aria-current={isActive(n.href, path) ? 'page' : undefined}>
+              <Link key={n.href} href={n.href} aria-current={isActive(n.href, path) ? 'page' : undefined} title={rail ? name : undefined} aria-label={rail ? name : undefined} data-label={n.label}>
                 <Icon name={n.icon} />
                 <span className="lbl">{n.label}</span>
                 {c ? <span className={`count${n.key === 'notif' ? ' hot' : ''}`}><span className="sr">, </span>{c > 99 ? '99+' : c}<span className="sr"> new</span></span> : null}
@@ -145,7 +162,8 @@ export function ProductSwitch({ products, current, action }: { products: { id: s
         <span className="mono" style={{ ['--h' as string]: monoHue(cur?.name || 'B') }} aria-hidden>{(cur?.name || '?')[0]}</span>
         <span className="switch-txt" aria-hidden><b>{cur?.name}</b><small>{cur?.newsletter_name}</small></span>
         <span className="switch-chev" aria-hidden>{busy ? <Spinner size={13} /> : <Icon name="updown" size={15} />}</span>
-        <select key={current} id="product-switch" name="product" defaultValue={current} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
+        <select key={current} id="product-switch" name="product" defaultValue={current} title={cur ? `${cur.name} · ${cur.newsletter_name}` : undefined}
+          onChange={(e) => { const sel = e.currentTarget; const v = sel.value; sel.value = current; guardedNav(() => { sel.value = v; sel.form?.requestSubmit(); }); }}>
           {products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.newsletter_name}</option>)}
         </select>
       </div>
@@ -199,5 +217,28 @@ export function ScrollEdge() {
     window.addEventListener('scroll', on, { passive: true });
     return () => { window.removeEventListener('scroll', on); cancelAnimationFrame(raf); };
   }, [path]);
+  return null;
+}
+
+/**
+ * Phones: segmented controls and tab strips scroll sideways. Bring the selected segment into view on every
+ * navigation so “Meeting booked” or the fourth filter is never hidden off the edge.
+ */
+export function SegmentInView() {
+  const path = usePathname();
+  const sp = useSearchParams();
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLElement>('main .tabs, main .seg, main .cx-radio-seg, main .se-nav, main [data-seg]').forEach((bar) => {
+        if (bar.scrollWidth <= bar.clientWidth + 1) return;
+        const on = bar.querySelector<HTMLElement>('[aria-current="page"], [aria-current="true"], [aria-pressed="true"], [aria-selected="true"], [aria-checked="true"], input:checked + span');
+        if (!on) return;
+        const b = bar.getBoundingClientRect(), r = on.getBoundingClientRect();
+        if (r.left >= b.left + 8 && r.right <= b.right - 28) return;
+        bar.scrollTo({ left: bar.scrollLeft + (r.left + r.width / 2) - (b.left + b.width / 2), behavior: 'instant' as ScrollBehavior });
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [path, sp]);
   return null;
 }

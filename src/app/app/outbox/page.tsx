@@ -6,7 +6,7 @@ import { typo } from '@/components/shell/kinds';
 import { smtpReady, getSetting } from '@/lib/settings';
 import { fmtTime, todayIn, utcToZonedInput, TZ_DEFAULT } from '@/lib/format';
 import { clearOutbox } from '../actions';
-import { Confirm } from '@/components/ui';
+import { DangerMenu } from '@/components/shell/MoreMenu';
 import { Avatar } from '@/components/bits';
 import { Icon } from '@/components/shell/icons';
 
@@ -28,14 +28,16 @@ export default async function Outbox() {
     <div className="pg outbox">
       <div className="ph">
         <div>
-          <span className="eyebrow">{smtp ? 'Saved copies' : `${rows.length} saved ${rows.length === 1 ? 'email' : 'emails'}`}</span>
+          <span className="eyebrow">{getSetting('general').appName}</span>
           <h1>Email outbox</h1>
-          <p className="sub">{smtp ? 'SMTP is connected, so new emails are really sent. This list only keeps emails saved earlier.' : 'SMTP isn’t connected yet, so every email the app would send is saved here instead. Open one to see exactly what the reader gets.'}</p>
+          <p className="sub">{rows.length ? `${rows.length} saved ${rows.length === 1 ? 'email' : 'emails'}. ` : ''}{smtp ? 'SMTP is connected, so new emails are really sent; this list only keeps copies saved earlier.' : 'SMTP isn’t connected yet, so every email the app would send is saved here instead. Open one to see exactly what the reader gets.'}</p>
         </div>
-        <div className="row">
-          {rows.length > 0 && <Confirm action={clearOutbox} label="Clear" className="btn" confirmLabel="Yes, clear all" />}
-          {!smtp && <Link className="btn primary" href="/app/settings?tab=email"><Icon name="mail" size={16} />Connect SMTP</Link>}
-        </div>
+        {(rows.length > 0 || !smtp) && (
+          <div className="row">
+            {!smtp && <Link className="btn primary" href="/app/settings?tab=email"><Icon name="mail" size={16} />Connect SMTP</Link>}
+            {rows.length > 0 && <DangerMenu label="More outbox actions" item="Clear outbox…" title={`Clear all ${rows.length} saved ${rows.length === 1 ? 'email' : 'emails'}?`} body="They’re removed from the outbox for good. Nothing that was really sent is affected." confirm="Clear outbox" pending="Clearing…" action={clearOutbox} />}
+          </div>
+        )}
       </div>
       {rows.length ? (
         <div className="tbl-wrap mail-list">

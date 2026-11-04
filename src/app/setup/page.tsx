@@ -42,8 +42,8 @@ export default async function Setup({ searchParams }: { searchParams: Promise<{ 
         <form className={`card${sp.e ? ' shake' : ''}`} action={setup} aria-labelledby="auth-h">
           <div className="auth-mark" aria-hidden><Icon name="editions" size={26} strokeWidth={1.9} /></div>
           <div className="auth-title">
-            <div className="eyebrow">First-time setup</div>
-            <h1 id="auth-h">Welcome to Brief Studio</h1>
+            <div className="eyebrow">Brief Studio</div>
+            <h1 id="auth-h">Set up your studio</h1>
             <p className="hint">Create the admin account. Your two products (Unada and HeyVeya), news sources, weekly automations and the four month-1 sample editions will be set up for you.</p>
           </div>
           <ul className="auth-gets" aria-label="Set up for you">

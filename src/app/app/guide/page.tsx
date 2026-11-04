@@ -33,7 +33,7 @@ export default async function Guide() {
       <article className="prose guide-body">
         <div className="ph">
           <div>
-            <span className="eyebrow">Guide</span>
+            <span className="eyebrow">{g.appName}</span>
             <h1>How Brief Studio works</h1>
             <p className="sub">One weekly edition per product. It lives at one link, goes out by WhatsApp and email, and every tap tells you who’s warming up.</p>
           </div>

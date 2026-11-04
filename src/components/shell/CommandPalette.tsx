@@ -3,28 +3,39 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconName } from './icons';
 import { NAV } from './nav';
+import { guardedNav } from './navGuard';
 
-type Cmd = { id: string; label: string; group: 'Actions' | 'Go to' | 'Products' | 'Account'; icon: IconName; href?: string; run?: () => void; keywords?: string; hint?: string };
+type Group = 'Actions' | 'Go to' | 'Contacts' | 'Editions' | 'Stories' | 'Products' | 'Account';
+type Cmd = { id: string; label: string; group: Group; icon: IconName; href?: string; run?: () => void; keywords?: string; hint?: string; content?: boolean };
+const CONTENT: Record<PaletteItem['k'], [Group, IconName]> = { c: ['Contacts', 'person'], e: ['Editions', 'editions'], s: ['Stories', 'newspaper'] };
+const PER_GROUP = 5;
 
 export const openPalette = () => window.dispatchEvent(new Event('cmdk:open'));
 
-/** Subsequence fuzzy match. Returns a score (higher is better) and the indexes to highlight, or null.
- *  Only a contiguous substring match is highlighted: scattered single letters read as noise. */
-function fuzzy(q: string, text: string): { score: number; hits: number[] } | null {
+/** What the palette can find besides pages and actions: a compact list the server layout passes in. */
+export type PaletteItem = { k: 'c' | 'e' | 's'; id: string; label: string; hint?: string; href: string };
+
+/**
+ * Rank a label against the query. Prefix beats a word start, which beats any contiguous run; a command can also
+ * match by its initials (“ne” → New edition). Returns the score and the letters to highlight, or null.
+ */
+function rank(q: string, text: string, initials = false, anywhere = true): { score: number; hits: number[] } | null {
   if (!q) return { score: 0, hits: [] };
   const t = text.toLowerCase();
-  const direct = t.indexOf(q);
-  if (direct >= 0) return { score: 1000 - direct * 4 - (t.length - q.length) * 0.5 + (direct === 0 || t[direct - 1] === ' ' ? 200 : 0), hits: Array.from({ length: q.length }, (_, i) => direct + i) };
-  const hits: number[] = [];
-  let score = 0, last = -2, ti = 0;
-  for (const ch of q) {
-    if (ch === ' ') continue;
-    const at = t.indexOf(ch, ti);
-    if (at < 0) return null;
-    score += at === last + 1 ? 12 : at === 0 || t[at - 1] === ' ' ? 10 : 1;
-    hits.push(at); last = at; ti = at + 1;
+  const run = (at: number) => Array.from({ length: q.length }, (_, i) => at + i);
+  if (t.startsWith(q)) return { score: 3000 - t.length * 0.5, hits: run(0) };
+  const word = new RegExp(`(^|[^\\p{L}\\p{N}])${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'u').exec(t);
+  if (word) { const at = word.index + word[1].length; return { score: 2500 - at * 2 - t.length * 0.2, hits: run(at) }; }
+  const at = t.indexOf(q);
+  if (anywhere && at >= 0) return { score: 1800 - at * 2 - t.length * 0.2, hits: run(at) };
+  if (initials && !q.includes(' ') && q.length >= 2) {
+    const starts = [...t.matchAll(/(^|[^\p{L}\p{N}])(\p{L}|\p{N})/gu)].map((m) => m.index! + m[1].length);
+    let i = 0;
+    const hits: number[] = [];
+    for (const s of starts) if (i < q.length && t[s] === q[i]) { hits.push(s); i++; }
+    if (i === q.length) return { score: 1500 - t.length * 0.2, hits };
   }
-  return { score: score - t.length * 0.1, hits: [] };
+  return null;
 }
 
 function Mark({ text, hits }: { text: string; hits: number[] }) {
@@ -33,8 +44,8 @@ function Mark({ text, hits }: { text: string; hits: number[] }) {
   return <>{[...text].map((c, i) => (set.has(i) ? <mark key={i}>{c}</mark> : <span key={i}>{c}</span>))}</>;
 }
 
-export function CommandPalette({ products, current, switchAction, logoutAction }: {
-  products: { id: string; name: string; newsletter_name: string }[]; current?: string;
+export function CommandPalette({ products, current, switchAction, logoutAction, items = [] }: {
+  products: { id: string; name: string; newsletter_name: string }[]; current?: string; items?: PaletteItem[];
   switchAction: (fd: FormData) => Promise<void>; logoutAction: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -93,16 +104,25 @@ export function CommandPalette({ products, current, switchAction, logoutAction }
       run: () => { const f = switchForm.current!; (f.elements.namedItem('product') as HTMLInputElement).value = p.id; (f.elements.namedItem('to') as HTMLInputElement).value = window.location.pathname + window.location.search; f.requestSubmit(); },
     });
     out.push({ id: 'signout', group: 'Account', label: 'Sign out', icon: 'signout', run: () => outForm.current?.requestSubmit(), keywords: 'logout log out' });
+    for (const it of items) { const [group, icon] = CONTENT[it.k]; out.push({ id: `${it.k}-${it.id}`, group, label: it.label, hint: it.hint, icon, href: it.href, content: true }); }
     return out;
-  }, [products, current]);
+  }, [products, current, items]);
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return cmds.filter((c) => c.group !== 'Account').map((c) => ({ c, hits: [] as number[], score: 0 }));
-    return cmds
-      .map((c) => { const m = fuzzy(needle, c.label); const k = m ? null : fuzzy(needle, `${c.keywords || ''} ${c.hint || ''}`); return m ? { c, hits: m.hits, score: m.score + 50 } : k ? { c, hits: [], score: k.score - 100 } : null; })
-      .filter(Boolean)
-      .sort((a, b) => b!.score - a!.score) as { c: Cmd; hits: number[]; score: number }[];
+    if (!needle) return cmds.filter((c) => c.group !== 'Account' && !c.content).map((c) => ({ c, hits: [] as number[], score: 0 }));
+    const seen: Partial<Record<Group, number>> = {};
+    return (cmds
+      .map((c) => {
+        const m = rank(needle, c.label, !c.content);
+        if (m) return { c, hits: m.hits, score: m.score };
+        // Keywords and the secondary line (company, status) count only at a word start, below any label match, unhighlighted.
+        const k = rank(needle, `${c.keywords || ''} ${c.hint || ''}`.trim(), false, false);
+        return k ? { c, hits: [] as number[], score: k.score - 2000 } : null;
+      })
+      .filter(Boolean) as { c: Cmd; hits: number[]; score: number }[])
+      .sort((a, b) => b.score - a.score)
+      .filter((r) => !r.c.content || (seen[r.c.group] = (seen[r.c.group] || 0) + 1) <= PER_GROUP);
   }, [q, cmds]);
 
   useEffect(() => { setActive(0); }, [q]);
@@ -113,8 +133,8 @@ export function CommandPalette({ products, current, switchAction, logoutAction }
   const choose = (c?: Cmd) => {
     if (!c) return;
     hide();
-    if (c.run) c.run();
-    else if (c.href) router.push(c.href);
+    // Unsaved settings get a say before the palette navigates away.
+    guardedNav(() => { if (c.run) c.run(); else if (c.href) router.push(c.href); });
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -152,13 +172,13 @@ export function CommandPalette({ products, current, switchAction, logoutAction }
               <Icon name="search" size={20} />
               <input
                 ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
-                placeholder="Search pages and actions…" aria-label="Search pages and actions" role="combobox" aria-expanded="true"
+                placeholder="Search pages, people, editions and stories" aria-label="Search pages, people, editions and stories" role="combobox" aria-expanded="true"
                 aria-controls={`${uid}-list`} aria-activedescendant={sel ? `${uid}-${active}` : undefined} autoComplete="off" spellCheck={false}
               />
               <kbd className="cmdk-esc" onClick={hide}>esc</kbd>
             </div>
             <div className="cmdk-list" id={`${uid}-list`} role="listbox" ref={list} aria-label="Results">
-              {flat.length === 0 && <div className="cmdk-empty"><Icon name="search" size={28} /><b>No results for “{q}”</b><span>Try a page name like “Leads” or an action like “New edition”.</span></div>}
+              {flat.length === 0 && <div className="cmdk-empty"><Icon name="search" size={28} /><b>No results for “{q}”</b><span>Try a person, an edition title, a page like “Leads” or an action like “New edition”.</span></div>}
               {grouped.map((g) => (
                 <div key={g.group} role="group" aria-label={g.group}>
                   <div className="cmdk-grp" aria-hidden>{g.group}</div>
@@ -194,7 +214,7 @@ export function PaletteButton({ variant = 'field' }: { variant?: 'field' | 'icon
   useEffect(() => { setMac(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)); }, []);
   if (variant === 'icon') return <button type="button" className="icon-btn" onClick={openPalette} aria-label="Search and commands"><Icon name="search" size={20} /></button>;
   return (
-    <button type="button" className="search-btn" onClick={openPalette} aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'}>
+    <button type="button" className="search-btn" onClick={openPalette} aria-keyshortcuts={mac ? 'Meta+K' : 'Control+K'} aria-label="Search" title={`Search (${mac ? '⌘' : 'Ctrl+'}K)`}>
       <Icon name="search" size={15} />
       <span>Search</span>
       <span className="keys" aria-hidden><kbd>{mac ? '⌘' : 'Ctrl'}</kbd><kbd>K</kbd></span>
