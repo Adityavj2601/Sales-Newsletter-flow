@@ -160,7 +160,7 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
       )}
 
       <section className="card" aria-labelledby="h-who">
-        <div className="card-head"><h2 id="h-who">Who engaged</h2><Link className="btn sm ghost" href="/app/leads">All leads<Icon name="arrow" size={13} /></Link></div>
+        <div className="card-head"><h2 id="h-who">Who engaged</h2><Link className="btn sm ghost" href="/app/leads">All leads<Icon name="chev" size={13} /></Link></div>
         {people.length ? (
           <ul className="res-people">{people.map((r) => {
             const nm = `${r.first_name} ${r.last_name}`.trim();

@@ -411,6 +411,8 @@ details.more > summary::-webkit-details-marker { display: none; }
 .stat-tile .sv { font: 700 30px/1.05 var(--f-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .stat-tile .sk { color: var(--muted); font-size: 13px; font-weight: 500; }
 .stat-tile .sm { color: var(--faint); font-size: 12px; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 /* Narrow screens: segmented controls scroll horizontally with a fade instead of clipping */
 @media (max-width: 700px) {
   .tabs, .seg { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; max-width: 100%;

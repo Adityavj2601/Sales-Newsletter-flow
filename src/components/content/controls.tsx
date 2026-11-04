@@ -186,7 +186,7 @@ function until(ms: number) {
   const f = ms / 1000;
   if (f < 3600) return `in ${Math.max(1, Math.round(f / 60))} min`;
   if (f < 86400) return `in ${Math.round(f / 3600)} h`;
-  return `in ${Math.round(f / 86400)} d`;
+  { const n = Math.round(f / 86400); return `in ${n} day${n === 1 ? '' : 's'}`; }
 }
 export function Countdown({ iso }: { iso: string }) {
   const [, tick] = useState(0);

@@ -70,7 +70,7 @@ export default async function Automations() {
       </div>
 
       <section className="au-hist" aria-labelledby="au-hist-h">
-        <div className="au-hist-h"><h2 id="au-hist-h" className="section-title">Run history</h2><span className="hint">Last {runs.length} run{runs.length === 1 ? '' : 's'}. Tap one to see its log.</span></div>
+        <div className="au-hist-h"><h2 id="au-hist-h" className="section-title">Run history</h2><span className="hint">{runs.length === 1 ? 'The latest run' : `The latest ${runs.length} runs`}. Select one to see its log.</span></div>
         {days.length ? days.map((d) => (
           <div key={d.key} className="au-day">
             <h3 className="group-title">{d.label}<span className="cx-group-n">{d.items.length}</span></h3>

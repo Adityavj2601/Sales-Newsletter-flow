@@ -33,7 +33,7 @@ export default async function Notifications() {
         <div>
           <span className="eyebrow">{p.name}<span className="sep" aria-hidden>·</span>{p.newsletter_name}</span>
           <h1>Notifications</h1>
-          <p className="sub">{unread > 0 ? `${unread} unread. ` : rows.length ? 'You’re all caught up. ' : ''}Interest taps, drafts ready for review, sends and automation problems. Interest taps are also emailed to your alert address.</p>
+          <p className="sub">{unread > 0 ? `${unread} unread. ` : rows.length ? 'You’re all caught up. ' : ''}Interest taps (also emailed to you), drafts ready for review, sends and automation problems.</p>
         </div>
         {unread > 0 ? (
           <form action={markAllRead} className="row">
