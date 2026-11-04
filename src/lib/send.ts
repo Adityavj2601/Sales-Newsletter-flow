@@ -137,7 +137,14 @@ export async function sendTestEmail(editionId: string, to: string) {
   const p = getProduct(e.product_id)!;
   const d = newDelivery(e.id, null, 'test', 'queued');
   const base = baseUrl();
-  const res = await sendMail({ to, kind: 'test', from: fromFor(p), replyTo: p.brand.replyTo || undefined, subject: `[TEST] ${personalize(e.content.subject, { first_name: 'Test' })}`, html: renderEmail(e, p, { token: d.token, firstName: 'Test' }, { base }), text: renderEmailText(e, p, { token: d.token }, base), headers: emailHeaders(p, d, base) });
+  let res;
+  try {
+    res = await sendMail({ to, kind: 'test', from: fromFor(p), replyTo: p.brand.replyTo || undefined, subject: `[TEST] ${personalize(e.content.subject, { first_name: 'Test' })}`, html: renderEmail(e, p, { token: d.token, firstName: 'Test' }, { base }), text: renderEmailText(e, p, { token: d.token }, base), headers: emailHeaders(p, d, base) });
+  } catch (err: any) {
+    update('deliveries', d.id, { status: 'failed', error: String(err?.message || err).slice(0, 300) });
+    const m = String(err?.message || err);
+    throw new Error(/ECONNREFUSED/.test(m) ? 'The email server refused the connection. Check the SMTP host and port in Settings.' : /ENOTFOUND/.test(m) ? 'Couldn’t find the email server. Check the SMTP host in Settings.' : /535|auth/i.test(m) ? 'The email server rejected the username or password.' : m);
+  }
   update('deliveries', d.id, { status: 'sent', sent_at: now(), provider_id: res.id });
   return res;
 }
@@ -155,7 +162,8 @@ export function manualWhatsApp(editionId: string, contactId: string) {
   const why = canSend(e);
   if (why) throw new Error(why);
   const c = get('SELECT * FROM contacts WHERE id = ? AND product_id = ?', contactId, e.product_id);
-  if (!c?.phone) throw new Error('This contact has no phone number.');
+  if (!c) throw new Error('Contact not found for this product.');
+  if (!c.phone) throw new Error('This contact has no phone number.');
   if (c.status !== 'active' || !c.wa_consent) throw new Error('This contact hasn’t agreed to WhatsApp messages.');
   const d = existingDelivery(e.id, c.id, 'wa_manual') || newDelivery(e.id, c.id, 'wa_manual', 'queued');
   const text = renderWhatsApp(e, p, personalLink(e, p, d.token), c.first_name);
@@ -213,7 +221,7 @@ export async function processQueue(log: (s: string) => void) {
   // Pace across every trigger (built-in timer, /api/cron, Send now): count what already went out in the last minute.
   const recent = Number(get("SELECT COUNT(*) AS n FROM deliveries WHERE channel IN ('email','whatsapp') AND sent_at >= ?", new Date(Date.now() - 60_000).toISOString())?.n || 0);
   const room = perMin - recent;
-  const batch = room > 0 ? all("SELECT * FROM deliveries WHERE status = 'queued' AND channel IN ('email','whatsapp') AND (send_after IS NULL OR send_after <= ?) ORDER BY created_at LIMIT ?", now(), room) : [];
+  const batch = room > 0 ? all("SELECT * FROM deliveries WHERE status = 'queued' AND channel IN ('email','whatsapp') AND (send_after IS NULL OR send_after <= ?) ORDER BY attempts ASC, created_at LIMIT ?", now(), room) : [];
   for (const d of batch) {
     if (d.channel === 'email') await sendOneEmail(d);
     else await sendOneWhatsApp(d);
@@ -238,7 +246,7 @@ export async function processQueue(log: (s: string) => void) {
 /** Mark an edition as sent without the email queue (e.g. WhatsApp-only, copied link). */
 export function markSent(editionId: string) {
   const r = run("UPDATE editions SET status = 'sent', sent_at = ? WHERE id = ? AND status IN ('approved','scheduled')", now(), editionId);
-  if (!r.changes) throw new Error('Only an approved edition can be marked as sent.');
+  if (!r.changes) throw new Error('Only an approved or scheduled edition can be marked as sent.');
   markFeatured(editionId);
 }
 

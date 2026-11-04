@@ -29,6 +29,7 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
   const waApiAud = waReady() ? audienceFor(e, 'whatsapp') : [];
   const have = (ch: string) => new Set(all('SELECT contact_id FROM deliveries WHERE edition_id = ? AND channel = ?', e.id, ch).map((r) => r.contact_id));
   const gotEmail = have('email'), gotWa = have('whatsapp');
+  for (const r of all("SELECT contact_id FROM deliveries WHERE edition_id = ? AND channel = 'wa_manual' AND status <> 'queued'", e.id)) gotWa.add(r.contact_id);
   const pick = (rows: any[], got: Set<any>) => rows.filter((c) => !got.has(c.id)).map((c) => ({ tags: String(c.tags || '').split(',').map((t: string) => t.trim().toLowerCase()).filter(Boolean), city: String(c.city || '').toLowerCase() }));
   const failedCount = Number(get("SELECT COUNT(*) AS n FROM deliveries WHERE edition_id = ? AND status = 'failed' AND channel IN ('email','whatsapp')", e.id)?.n || 0);
   const tags = [...new Set(all("SELECT tags FROM contacts WHERE product_id = ? AND status = 'active'", p.id).flatMap((r) => String(r.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean)))].sort();
@@ -89,7 +90,7 @@ export default async function Distribute({ params }: { params: Promise<{ id: str
         {dl.length ? (
           <div className="tbl-wrap"><table className="tbl">
             <thead><tr><th>Who</th><th>Channel</th><th>Status</th><th>When</th><th>Note</th></tr></thead>
-            <tbody>{dl.map((d) => <tr key={d.id}><td>{d.contact_id ? <Link href={`/app/contacts/${d.contact_id}`}>{`${d.first_name || ''} ${d.last_name || ''}`.trim() || d.email || d.phone}</Link> : <span className="hint">test</span>}</td><td>{({ email: 'Email', whatsapp: 'WhatsApp API', wa_manual: 'WhatsApp (manual)', test: 'Test email' } as any)[d.channel] || d.channel}</td><td><span className={`pill ${d.status === 'failed' ? 'bad' : d.status === 'queued' ? '' : 'ok'}`}>{d.status}</span></td><td>{ago(d.sent_at || d.created_at)}</td><td className="hint clip">{d.error || ''}</td></tr>)}</tbody>
+            <tbody>{dl.map((d) => <tr key={d.id}><td>{d.contact_id ? <Link href={`/app/contacts/${d.contact_id}`}>{`${d.first_name || ''} ${d.last_name || ''}`.trim() || d.email || d.phone}</Link> : <span className="hint">test</span>}</td><td>{({ email: 'Email', whatsapp: 'WhatsApp API', wa_manual: 'WhatsApp (manual)', test: 'Test email' } as any)[d.channel] || d.channel}</td><td><span className={`pill ${d.status === 'failed' ? 'bad' : d.status === 'queued' || d.status === 'skipped' ? '' : 'ok'}`}>{d.status}</span></td><td>{ago(d.sent_at || d.created_at)}</td><td className="hint clip">{d.error || ''}</td></tr>)}</tbody>
           </table></div>
         ) : <div className="hint">Nothing sent yet.</div>}
       </section>

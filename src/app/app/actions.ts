@@ -29,7 +29,7 @@ export async function switchProduct(fd: FormData) {
   const id = s(fd, 'product');
   (await cookies()).set(PRODUCT_COOKIE, id, { path: '/', maxAge: 365 * 86400, sameSite: 'lax', httpOnly: true });
   const raw = s(fd, 'to');
-  const to = raw.startsWith('/app') && !raw.startsWith('//') ? raw : '/app';
+  const to = (raw.startsWith('/app') && !raw.startsWith('//') ? raw : '/app').replace(/([?&])p=[^&]*&?/, '$1').replace(/[?&]$/, '');
   redirect(to.startsWith('/app/editions/') || to.startsWith('/app/contacts/') ? to.split('/').slice(0, 3).join('/') : to);
 }
 export async function logout() {
@@ -235,7 +235,11 @@ export async function importContacts(_: ImportResult | null, fd: FormData): Prom
         const patch: any = {};
         for (const k of Object.keys(row)) if (row[k] && !existing[k]) patch[k] = row[k];
         if (email && !existing.email && !get('SELECT id FROM contacts WHERE product_id = ? AND email = ? AND id <> ?', p.id, email, existing.id)) patch.email = email;
-        if (phone && !existing.phone && !get('SELECT id FROM contacts WHERE product_id = ? AND phone = ? AND id <> ?', p.id, phone, existing.id)) patch.phone = phone;
+        if (phone && !existing.phone) {
+          if (get('SELECT id FROM contacts WHERE product_id = ? AND phone = ? AND id <> ?', p.id, phone, existing.id)) res.errors.push(`Row ${n + 2}: ${email || 'this row'} matched an existing contact, but phone ${phone} belongs to someone else, so it wasn’t added`);
+          else patch.phone = phone;
+        }
+        if (email && phone && existing.email === email && existing.phone && existing.phone !== phone) res.errors.push(`Row ${n + 2}: ${email} already has phone ${existing.phone}; the file’s ${phone} was ignored`);
         if (tags) patch.tags = [...new Set([...String(existing.tags || '').split(','), ...tags.split(',')].map((t) => t.trim()).filter(Boolean))].join(', ');
         if (existing.status === 'active') { if (emailConsent) patch.email_consent = 1; if (waConsent) patch.wa_consent = 1; }
         update('contacts', existing.id, patch);

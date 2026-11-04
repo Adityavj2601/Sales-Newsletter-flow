@@ -93,7 +93,7 @@ export function WaList({ editionId, contacts, blocked }: { editionId: string; co
       {blocked && <div className="notice warn">Approve the edition before sending.</div>}
       {err && <div className="notice bad">{err}</div>}
       <div className="tbl-wrap" style={{ maxHeight: 380, overflowY: 'auto' }}><table className="tbl"><tbody>
-        {list.map((c) => <tr key={c.id}><td><b>{c.name || c.phone}</b><div className="hint">{c.company}</div></td><td className="mono">{c.phone}</td><td className="num">{sent[c.id] ? <span className="pill ok">Sent ✓</span> : null} <button className={`btn sm ${sent[c.id] ? '' : 'primary'}`} disabled={blocked} onClick={() => open(c)}>{sent[c.id] ? 'Open again' : 'Open WhatsApp'}</button></td></tr>)}
+        {list.map((c) => <tr key={c.id}><td><b>{c.name || c.phone}</b><div className="hint">{c.company}</div><div className="hint mono">{c.phone}</div></td><td className="num" style={{ whiteSpace: 'nowrap' }}>{sent[c.id] ? <span className="pill ok">Sent ✓</span> : null} <button className={`btn sm ${sent[c.id] ? '' : 'primary'}`} disabled={blocked} onClick={() => open(c)}>{sent[c.id] ? 'Open again' : 'Open WhatsApp'}</button></td></tr>)}
       </tbody></table></div>
     </div>
   );
