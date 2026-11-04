@@ -1,10 +1,12 @@
 import { get, update, now } from '@/lib/db';
 import { getProduct, baseUrl } from '@/lib/settings';
 import { track, resolveToken } from '@/lib/tracking';
-import { shell, html } from '@/lib/render/page';
+import { shell, html, badge } from '@/lib/render/page';
 import { esc } from '@/lib/render/common';
 
 export const dynamic = 'force-dynamic';
+
+const TICK = '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 function page(req: Request, token: string, msg = '', confirmUnsub = false) {
   const u = new URL(req.url);
@@ -13,26 +15,31 @@ function page(req: Request, token: string, msg = '', confirmUnsub = false) {
   if (!r.contact || !r.productId) {
     const p = r.productId ? getProduct(r.productId) : getProduct(u.searchParams.get('p') || '');
     const reply = p?.brand.replyTo || p?.brand.senderEmail;
-    const body = `<h1>Unsubscribe</h1><p>This copy wasn’t sent with a personal link, so we can’t tell who you are from it.</p><p>${reply ? `Email <b>${esc(reply)}</b> with the word “unsubscribe”` : 'Reply to the email with the word “unsubscribe”'} and we’ll remove you straight away.</p>`;
+    const body = `<div class="done">${badge('info')}<h1>Unsubscribe</h1><p class="lead">This copy wasn’t sent with a personal link, so we can’t tell who you are from it.</p><p class="lead">${reply ? `Email <b>${esc(reply)}</b> with the word “unsubscribe”` : 'Reply to the email with the word “unsubscribe”'} and we’ll remove you straight away.</p></div>`;
     return p ? html(shell(p, 'Unsubscribe', body, base)) : new Response('Link expired', { status: 404 });
   }
   const p = getProduct(r.productId)!;
   const c = get('SELECT * FROM contacts WHERE id = ?', r.contact.id)!;
   const active = c.status === 'active';
   if (active && confirmUnsub) {
-    return html(shell(p, 'Unsubscribe', `<h1>Unsubscribe from ${esc(p.newsletter_name)}?</h1><p class="muted">${esc(c.email || c.phone || '')}</p>
-      <form method="post"><input type="hidden" name="do" value="unsubscribe"><div class="row"><button type="submit">Yes, unsubscribe me</button><a class="btn alt" href="${base}/u/${esc(token)}">Fewer emails instead</a></div></form>`, base));
+    return html(shell(p, 'Unsubscribe', `<div class="done">${badge('info')}<h1>Unsubscribe from ${esc(p.newsletter_name)}?</h1><p class="muted">${esc(c.email || c.phone || '')}</p></div>
+      <form method="post"><input type="hidden" name="do" value="unsubscribe"><div class="row"><button type="submit" class="solid-danger">Yes, unsubscribe me</button><a class="btn alt" href="${base}/u/${esc(token)}">Fewer emails instead</a></div></form>`, base));
   }
-  const body = `${msg ? `<p><b>${msg}</b></p>` : ''}<h1>${active ? 'Your preferences' : 'You’re unsubscribed'}</h1>
-  ${active ? `<form method="post"><input type="hidden" name="do" value="prefs">
+  const body = `${msg ? `<div class="flash" role="status">${TICK}<span>${msg}</span></div>` : ''}${active ? `<h1>Your preferences</h1>
     <p class="muted">${esc(p.newsletter_name)} from ${esc(p.name)}</p>
-    <label><input type="radio" name="frequency" value="weekly" ${c.frequency !== 'less' ? 'checked' : ''}> Every week</label>
-    <label><input type="radio" name="frequency" value="less" ${c.frequency === 'less' ? 'checked' : ''}> Less often (every other edition)</label>
-    ${c.email ? `<label><input type="checkbox" name="email" ${c.email_consent ? 'checked' : ''}> By email (${esc(c.email)})</label>` : ''}
-    ${c.phone ? `<label><input type="checkbox" name="wa" ${c.wa_consent ? 'checked' : ''}> On WhatsApp (${esc(c.phone)})</label>` : ''}
+    <form method="post"><input type="hidden" name="do" value="prefs">
+    <div class="gh" id="g-freq">How often</div>
+    <div class="group" role="radiogroup" aria-labelledby="g-freq">
+    <label class="cell"><span class="t">Every week</span><input type="radio" name="frequency" value="weekly" ${c.frequency !== 'less' ? 'checked' : ''}></label>
+    <label class="cell"><span class="t">Less often<small>Every other edition</small></span><input type="radio" name="frequency" value="less" ${c.frequency === 'less' ? 'checked' : ''}></label>
+    </div>
+    ${c.email || c.phone ? `<div class="gh">Send it to me</div><div class="group">
+    ${c.email ? `<label class="cell"><span class="t">By email<small>${esc(c.email)}</small></span><input type="checkbox" role="switch" name="email" ${c.email_consent ? 'checked' : ''}></label>` : ''}
+    ${c.phone ? `<label class="cell"><span class="t">On WhatsApp<small>${esc(c.phone)}</small></span><input type="checkbox" role="switch" name="wa" ${c.wa_consent ? 'checked' : ''}></label>` : ''}
+    </div>` : ''}
     <div class="row"><button type="submit">Save</button></div></form>
-    <form method="post" class="row"><input type="hidden" name="do" value="unsubscribe"><button class="btn alt" type="submit">Unsubscribe from everything</button></form>`
-    : `<p>You won’t receive ${esc(p.newsletter_name)} any more. Changed your mind?</p><form method="post"><input type="hidden" name="do" value="resubscribe"><button type="submit">Resubscribe</button></form>`}`;
+    <form method="post" class="row"><input type="hidden" name="do" value="unsubscribe"><button class="destr" type="submit">Unsubscribe from everything</button></form>`
+    : `<div class="done">${badge('info')}<h1>You’re unsubscribed</h1><p class="lead">You won’t receive ${esc(p.newsletter_name)} any more. Changed your mind?</p></div><form method="post"><input type="hidden" name="do" value="resubscribe"><div class="row"><button type="submit">Resubscribe</button></div></form>`}`;
   return html(shell(p, 'Preferences', body, base));
 }
 

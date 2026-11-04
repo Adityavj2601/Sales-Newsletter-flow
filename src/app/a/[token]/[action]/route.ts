@@ -1,7 +1,7 @@
 import { get } from '@/lib/db';
 import { getProduct, baseUrl } from '@/lib/settings';
 import { track, addNote, resolveToken, isBot } from '@/lib/tracking';
-import { shell, html } from '@/lib/render/page';
+import { shell, html, badge } from '@/lib/render/page';
 import { esc } from '@/lib/render/common';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ const COPY: Record<string, (name: string, product: string) => [string, string]> 
   poll: () => ['Thanks for voting.', 'Your answer is counted.'],
 };
 
-const noteForm = (evId: string, back: string) => `<form method="post"><input type="hidden" name="ev" value="${esc(evId)}"><label for="note" class="muted" style="display:block">Optional note for the team</label><textarea id="note" name="note" rows="3" maxlength="1000" placeholder="e.g. We’re launching in Pune in March"></textarea><div class="row"><button type="submit">Send note</button><a class="btn alt" href="${back}">Back to the edition</a></div></form>`;
+const noteForm = (evId: string, back: string) => `<form method="post" class="panel"><input type="hidden" name="ev" value="${esc(evId)}"><label for="note" class="fl">Optional note for the team</label><textarea id="note" name="note" rows="4" maxlength="1000" placeholder="e.g. We’re launching in Pune in March"></textarea><div class="row"><button type="submit">Send note</button><a class="btn alt" href="${back}">Back to the edition</a></div></form>`;
 
 async function handle(req: Request, params: Promise<{ token: string; action: string }>, note?: string, eventId?: string) {
   const { token: rawToken, action } = await params;
@@ -34,8 +34,8 @@ async function handle(req: Request, params: Promise<{ token: string; action: str
   if (note !== undefined) {
     const saved = token !== '_' && eventId ? await addNote(eventId, token, note) : false;
     return html(shell(p, 'Thank you', saved
-      ? `<h1>Thank you.</h1><p>We’ve passed your note to the team.</p><div class="row"><a class="btn alt" href="${back}">Back to the edition</a></div>`
-      : `<h1>Sorry, that didn’t go through.</h1><p>Your note couldn’t be saved from this link. Just reply to the email or WhatsApp message instead and we’ll pick it up.</p><div class="row"><a class="btn alt" href="${back}">Back to the edition</a></div>`, base));
+      ? `<div class="done">${badge('ok')}<h1>Thank you.</h1><p class="lead">We’ve passed your note to the team.</p></div><div class="row"><a class="btn alt" href="${back}">Back to the edition</a></div>`
+      : `<div class="done">${badge('warn')}<h1>Sorry, that didn’t go through.</h1><p class="lead">Your note couldn’t be saved from this link. Just reply to the email or WhatsApp message instead and we’ll pick it up.</p></div><div class="row"><a class="btn alt" href="${back}">Back to the edition</a></div>`, base));
   }
   // Link scanners and HEAD requests see the page but never count as a reader action.
   const bot = req.method === 'HEAD' || isBot(req.headers.get('user-agent'));
@@ -62,7 +62,7 @@ async function handle(req: Request, params: Promise<{ token: string; action: str
   }
   const [h, t] = (COPY[action] || COPY.interested)(r.contact?.first_name || '', p.name);
   const canNote = ['interested', 'showcase', 'book'].includes(action) && ev?.id && token !== '_';
-  const body = `<h1>${esc(h)}</h1>${t ? `<p>${esc(t)}</p>` : ''}${isTest ? '<p class="muted">(Test or preview: nothing was recorded.)</p>' : ''}${canNote ? noteForm(ev.id, back) : `<div class="row"><a class="btn alt" href="${back}">Back to the edition</a></div>`}`;
+  const body = `<div class="done">${badge(action === 'notnow' ? 'info' : 'ok')}<h1>${esc(h)}</h1>${t ? `<p class="lead">${esc(t)}</p>` : ''}${isTest ? '<p class="muted">(Test or preview: nothing was recorded.)</p>' : ''}</div>${canNote ? noteForm(ev.id, back) : `<div class="row"><a class="btn alt" href="${back}">Back to the edition</a></div>`}`;
   return html(shell(p, 'Thanks', body, base));
 }
 
