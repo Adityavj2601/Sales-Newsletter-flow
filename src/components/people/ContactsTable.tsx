@@ -71,7 +71,6 @@ export function ContactsTable({ rows, tags, q: q0, tag, consent, status, total, 
         <noscript><button className="btn">Filter</button></noscript>
         {filtered && <Link className="btn ghost sm" href="/app/contacts" onClick={() => setQ('')}>Clear</Link>}
         <span className="ccount" aria-live="polite">{list.length !== of ? `${list.length} of ${of}` : ''}{capped ? ' (first 500)' : ''}</span>
-        <a className="btn sm cexport" href="/api/export?type=contacts">Export CSV</a>
       </Form>
 
       <form action={action} className="cform">

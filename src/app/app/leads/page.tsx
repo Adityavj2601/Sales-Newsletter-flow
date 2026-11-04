@@ -14,8 +14,11 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Leads' };
 
 const ACT: Record<string, [string, string]> = { interested: ['I’m interested', 'flame'], book: ['Book 15 min', 'calendar'], showcase: ['Our-work card', 'spark'], more: ['Send me more', 'mail'] };
-/** The stage tiles are the only filter. "All" is everyone who engaged; the rest are pipeline stages. */
-const TILES = ['all', 'new', 'warm', 'contacted', 'meeting', 'won'] as const;
+/** The stage tiles are the only filter. "All" is everyone who engaged; the rest are pipeline stages, ending in Won or Lost. */
+const TILES = ['all', 'new', 'warm', 'contacted', 'meeting', 'won', 'lost'] as const;
+/** The older "Not interested" stage is counted and listed as Lost. */
+const STAGE_SQL: Partial<Record<Tile, string>> = { lost: "stage IN ('lost','not_interested')" };
+const SHORT: Partial<Record<Tile, string>> = { meeting: 'Meeting' };
 type Tile = (typeof TILES)[number];
 /** Older links (alerts, nudges) used ?view=…; map them onto the stages. */
 const LEGACY: Record<string, Tile> = { hot: 'all', all: 'all', warm: 'warm', pipeline: 'contacted' };
@@ -26,6 +29,7 @@ const EMPTY: Record<Tile, string> = {
   contacted: 'After you reply to a lead, tap “Mark contacted” and they move here.',
   meeting: 'Leads you’ve booked a meeting with show up here.',
   won: 'Mark a lead as won on their contact page.',
+  lost: 'Leads who said no or went quiet. Mark them Lost on their contact page to keep the pipeline honest.',
 };
 
 export default async function Leads({ searchParams }: { searchParams: Promise<{ stage?: string; view?: string }> }) {
@@ -35,9 +39,10 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
   const engaged = "SELECT * FROM contacts WHERE product_id = ? AND status = 'active' AND (score > 0 OR stage <> 'new')";
   const rows = stage === 'all'
     ? all(`${engaged} ORDER BY COALESCE(last_intent_at, last_engaged_at) DESC, score DESC LIMIT 300`, p.id)
+    : STAGE_SQL[stage] ? all(`${engaged} AND ${STAGE_SQL[stage]} ORDER BY COALESCE(last_intent_at, last_engaged_at) DESC, score DESC LIMIT 300`, p.id)
     : all(`${engaged} AND stage = ? ORDER BY COALESCE(last_intent_at, last_engaged_at) DESC, score DESC LIMIT 300`, p.id, stage);
   const stageN: Record<string, number> = Object.fromEntries(all("SELECT stage, COUNT(*) AS n FROM contacts WHERE product_id = ? AND status = 'active' AND (score > 0 OR stage <> 'new') GROUP BY stage", p.id).map((r) => [r.stage, Number(r.n)]));
-  const n = (k: Tile) => (k === 'all' ? Object.values(stageN).reduce((a, b) => a + b, 0) : stageN[k] || 0);
+  const n = (k: Tile) => (k === 'all' ? Object.values(stageN).reduce((a, b) => a + b, 0) : k === 'lost' ? (stageN.lost || 0) + (stageN.not_interested || 0) : stageN[k] || 0);
   return (
     <div className="leads">
       <div className="ph">
@@ -63,7 +68,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
       <nav className="lp" aria-label="Filter by stage">
         {TILES.map((k) => (
           <Link key={k} href={k === 'all' ? '/app/leads' : `/app/leads?stage=${k}`} className={`lp-s s-${k}${n(k) ? '' : ' is-zero'}`} aria-current={stage === k ? 'page' : undefined} scroll={false}>
-            <span className="lp-k">{k === 'all' ? 'All' : STAGE_LABEL[k]}</span>
+            <span className="lp-k">{k === 'all' ? 'All' : SHORT[k] ? <><span className="lp-long">{STAGE_LABEL[k]}</span><span className="lp-short">{SHORT[k]}</span></> : STAGE_LABEL[k]}</span>
             <span className="lp-v">{n(k)}</span>
           </Link>
         ))}
@@ -107,7 +112,7 @@ export default async function Leads({ searchParams }: { searchParams: Promise<{ 
           <span className="lempty-ic"><Icon name={stage === 'all' || stage === 'warm' ? 'flame' : 'users'} size={24} /></span>
           <b>{stage === 'all' ? 'No leads yet' : `No one in ${STAGE_LABEL[stage]}`}</b>
           <span>{EMPTY[stage]}</span>
-          {stage !== 'all' && n('all') > 0 && <Link className="btn" href="/app/leads" scroll={false}>Show all {n('all')}</Link>}
+          {stage !== 'all' && n('all') > 0 && <Link className="btn" href="/app/leads" scroll={false}>Show everyone</Link>}
         </div>
       )}
     </div>

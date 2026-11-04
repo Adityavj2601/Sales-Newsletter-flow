@@ -4,14 +4,16 @@ import { requireUser } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { all, get, parse } from '@/lib/db';
-import { fmtDate, fmtPhone, edNo } from '@/lib/format';
+import { fmtDate, fmtPhone, edNo, todayIn } from '@/lib/format';
 import { STAGE_LABEL, tagLabel } from '@/components/bits';
 import { Submit, Confirm } from '@/components/ui';
+import { getSetting } from '@/lib/settings';
+import { Popover } from '@/components/people/Popover';
 import { Avatar } from '@/components/people/Avatar';
 import { Icon } from '@/components/people/Icon';
 import { Rel } from '@/components/people/Rel';
 import { StagePicker } from '@/components/people/StageAction';
-import { EditSheet, ConsentSwitches } from '@/components/people/ContactBits';
+import { EditSheet, ConsentSwitches, NoteComposer } from '@/components/people/ContactBits';
 import { saveContact, deleteContact, setStage } from '../../actions';
 import { ContactFields } from '../fields';
 
@@ -26,6 +28,9 @@ const EV: Record<string, [string, string]> = {
   unsubscribe: ['x', 'bad'], resubscribe: ['check', 'ok'], note: ['pencil', ''], wa_reply: ['chat', 'ok'],
 };
 const CH: Record<string, string> = { email: 'Email', whatsapp: 'WhatsApp API', wa_manual: 'WhatsApp', test: 'Test' };
+const CH_ORDER = ['email', 'wa_manual', 'whatsapp', 'test'];
+/** "Not interested" is an older stage value; the picker offers only Lost and existing rows show as Lost. */
+const PICK = Object.entries(STAGE_LABEL).filter(([k]) => k !== 'not_interested');
 const DST: Record<string, [string, string]> = { queued: ['', 'Queued'], skipped: ['', 'Skipped'], failed: ['bad', 'Failed'], sent: ['ok', 'Sent'], delivered: ['ok', 'Delivered'], opened: ['ok', 'Opened'], clicked: ['ok', 'Clicked'] };
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -37,7 +42,8 @@ function parseNotes(raw: string | null) {
     if (!t) continue;
     const m = t.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*(Reader note:\s*)?(.*)$/i);
     if (m) items.push({ date: m[1], reader: !!m[2], text: m[3] });
-    else if (items.length && !items[items.length - 1].date) items[items.length - 1].text += '\n' + t;
+    // Lines without a date continue the note above (a team note can span lines); reader notes are always one line.
+    else if (items.length && !items[items.length - 1].reader) items[items.length - 1].text += '\n' + t;
     else items.push({ date: null, reader: false, text: t });
   }
   return items.reverse();
@@ -53,15 +59,26 @@ export default async function Contact({ params }: { params: Promise<{ id: string
   const raw = all(`SELECT ev.*, e.number, e.content FROM events ev LEFT JOIN editions e ON e.id = ev.edition_id WHERE ev.contact_id = ? AND ev.type NOT IN ('time') ORDER BY ev.created_at DESC LIMIT 100`, id);
   for (const ev of raw) if (ev.type === 'scroll') deepest.set(ev.edition_id, Math.max(deepest.get(ev.edition_id) || 0, Number(ev.value) || 0));
   const events = raw.filter((ev) => { if (ev.type !== 'scroll') return true; if (Number(ev.value) !== deepest.get(ev.edition_id)) return false; deepest.set(ev.edition_id, -1); return true; });
-  const dels = all(`SELECT d.*, e.number, e.content FROM deliveries d JOIN editions e ON e.id = d.edition_id WHERE d.contact_id = ? ORDER BY d.created_at DESC LIMIT 30`, id);
+  const dels = all(`SELECT d.*, e.number, e.content FROM deliveries d JOIN editions e ON e.id = d.edition_id WHERE d.contact_id = ? ORDER BY d.created_at DESC LIMIT 60`, id);
+  // One row per edition, one chip per channel (the latest delivery on that channel).
+  const sent: { id: string; number: number; title: string; at: string; chans: Map<string, any> }[] = [];
+  for (const d of dels) {
+    let row = sent.find((r) => r.id === d.edition_id);
+    if (!row) { row = { id: d.edition_id, number: d.number, title: parse<any>(d.content, {}).title || 'Untitled', at: d.sent_at || d.created_at, chans: new Map() }; sent.push(row); }
+    if (!row.chans.has(d.channel)) row.chans.set(d.channel, d);
+  }
   const name = `${c.first_name} ${c.last_name}`.trim() || c.email || fmtPhone(c.phone);
   const wa = c.phone ? `https://wa.me/${String(c.phone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${c.first_name || ''}, thanks for your interest! `)}` : null;
   const tags = String(c.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-  const stageActions = Object.fromEntries(Object.keys(STAGE_LABEL).map((k) => [k, setStage.bind(null, id, k)]));
+  const stageActions = Object.fromEntries(PICK.map(([k]) => [k, setStage.bind(null, id, k)]));
+  const stage = c.stage === 'not_interested' ? 'lost' : c.stage;
   const notes = parseNotes(c.notes);
   const score = Number(c.score || 0);
   // Reader notes already appear in Activity next to the tap that prompted them; Notes holds the team's own notes.
   const ownNotes = notes.filter((n) => !n.reader);
+  const today = todayIn(getSetting('general').timezone);
+  // The interest banner carries the WhatsApp reply; the header then keeps only Edit and ⋯.
+  const banner = !!c.last_intent;
   const __active = await activeProduct();
   return (
     <div className="pc">
@@ -80,7 +97,10 @@ export default async function Contact({ params }: { params: Promise<{ id: string
               <div className="full padd-foot"><span className="hint">Change the stage on the contact card.</span><Submit>Save</Submit></div>
             </form>
           </EditSheet>
-          {wa && <a className="btn wa" href={wa} target="_blank" rel="noreferrer"><Icon name="chat" size={15} />WhatsApp</a>}
+          {wa && !banner && <a className="btn wa" href={wa} target="_blank" rel="noreferrer"><Icon name="chat" size={15} />WhatsApp</a>}
+          <Popover className="pmenu" summary={<><Icon name="more" size={18} /><span className="pmenu-l">More</span></>}>
+            <div className="menu-danger"><Confirm action={deleteContact.bind(null, id)} label="Delete contact…" confirmLabel={`Delete ${c.first_name || 'contact'}`} /></div>
+          </Popover>
         </div>
       </div>
 
@@ -99,12 +119,12 @@ export default async function Contact({ params }: { params: Promise<{ id: string
           </div>
         </div>
         <dl className="pc-rows">
-          <div className="pc-stage"><dt className="pc-label">Stage</dt><dd><StagePicker stages={Object.entries(STAGE_LABEL)} current={c.stage} actions={stageActions} /></dd></div>
+          <div className="pc-stage"><dt className="pc-label">Stage</dt><dd><StagePicker stages={PICK} current={stage} actions={stageActions} /></dd></div>
           <div><dt className="pc-label">Tags</dt><dd>{tags.length ? <span className="ptags">{tags.map((t) => <span key={t} className="ptag">{tagLabel(t)}</span>)}</span> : <span className="hint">None yet. Add some with Edit.</span>}</dd></div>
         </dl>
       </section>
 
-      {c.last_intent && (
+      {banner && (
         <div className="notice ok pc-signal" role="status">
           <span className="ni" aria-hidden><Icon name={EV[c.last_intent]?.[0] || 'flame'} size={12} stroke={2.2} /></span>
           <div><b>{LABEL[c.last_intent] || c.last_intent}</b> <span className="pc-signal-t"><Rel iso={c.last_intent_at} />. Reply soon; interest fades within days.</span></div>
@@ -132,8 +152,9 @@ export default async function Contact({ params }: { params: Promise<{ id: string
             })}</ol> : <div className="pc-empty"><Icon name="clock" size={20} /><span>No activity yet. Opens, reads and taps show up here.</span></div>}
           </section>
 
-          <section className="card" aria-labelledby="h-notes">
-            <div className="card-head"><h2 id="h-notes">Your notes</h2><span className="hint">{ownNotes.length ? `${ownNotes.length} ${ownNotes.length === 1 ? 'note' : 'notes'}` : 'Add one with Edit'}</span></div>
+          <section className="card pc-notes" aria-labelledby="h-notes">
+            <div className="card-head"><h2 id="h-notes">Your notes</h2>{ownNotes.length ? <span className="hint">{ownNotes.length} {ownNotes.length === 1 ? 'note' : 'notes'}</span> : null}</div>
+            <NoteComposer key={`${String(c.notes || '').length}`} action={saveContact} c={c} today={today} name={c.first_name || 'this person'} />
             {ownNotes.length ? <ol className="ptl pnotes">{ownNotes.map((n, i) => (
               <li key={i}>
                 <span className="icon-chip ptl-dot" aria-hidden><Icon name="pencil" size={14} /></span>
@@ -142,7 +163,7 @@ export default async function Contact({ params }: { params: Promise<{ id: string
                   <p className="pnote">{n.text}</p>
                 </div>
               </li>
-            ))}</ol> : <p className="hint pc-none">Anything your team should remember about {c.first_name || 'this person'}. Notes readers leave appear in Activity.</p>}
+            ))}</ol> : <p className="hint pc-none">Only your team sees these. Notes readers leave appear in Activity.</p>}
           </section>
         </div>
 
@@ -155,19 +176,21 @@ export default async function Contact({ params }: { params: Promise<{ id: string
 
           <section className="card" aria-labelledby="h-sent">
             <div className="card-head"><h2 id="h-sent">Editions sent</h2></div>
-            {dels.length ? <ul className="pc-sent">{dels.map((d) => {
-              const [tone, label] = DST[d.status] || ['', cap(d.status)];
-              return (
-                <li key={d.id}>
-                  <span className="pc-sent-n tnum">{edNo(d.number)}</span>
-                  <div><b>{parse<any>(d.content, {}).title}</b><span>{CH[d.channel] || d.channel} · {fmtDate(d.sent_at || d.created_at)}</span></div>
-                  <span className={`pill ${tone}`}>{label}</span>
-                </li>
-              );
-            })}</ul> : <p className="hint">Nothing sent to this person yet.</p>}
+            {sent.length ? <ul className="pc-sent">{sent.map((r) => (
+              <li key={r.id}>
+                <span className="pc-sent-n tnum">{edNo(r.number)}</span>
+                <div className="pc-sent-b">
+                  <Link href={`/app/editions/${r.id}/analytics`} className="pc-sent-t">{r.title}</Link>
+                  <span className="pc-sent-d">{fmtDate(r.at)}</span>
+                  <span className="pc-sent-ch">{[...r.chans.values()].sort((x, y) => CH_ORDER.indexOf(x.channel) - CH_ORDER.indexOf(y.channel)).map((d) => {
+                    const [tone, label] = DST[d.status] || ['', cap(d.status)];
+                    return <span key={d.channel} className={`pill ${tone}`}>{CH[d.channel] || d.channel}<span className="pc-sent-sep" aria-hidden>·</span>{label}</span>;
+                  })}</span>
+                </div>
+              </li>
+            ))}</ul> : <p className="hint">Nothing sent to this person yet.</p>}
           </section>
 
-          <div className="pc-danger"><Confirm action={deleteContact.bind(null, id)} label="Delete contact" confirmLabel="Yes, delete" /></div>
         </div>
       </div>
     </div>

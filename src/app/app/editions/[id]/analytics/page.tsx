@@ -19,7 +19,7 @@ export const metadata = { title: 'Results' };
 
 const ACT: Record<string, [string, string]> = {
   interested: ['Interested', 'ok'], book: ['Booked 15 min', 'ok'], showcase: ['Our-work card', 'ok'], more: ['Wants more', 'info'], share: ['Shared', 'info'],
-  poll: ['Voted', ''], view: ['Opened', ''], open: ['Email open', ''], click: ['Clicked', ''], notnow: ['Not now', 'bad'], unsubscribe: ['Unsubscribed', 'bad'], note: ['Left a note', 'info'], wa_reply: ['WhatsApp reply', 'info'], resubscribe: ['Resubscribed', ''],
+  poll: ['Voted', ''], view: ['Opened', ''], open: ['Email open', ''], click: ['Clicked', ''], notnow: ['Not now', ''], unsubscribe: ['Unsubscribed', 'bad'], note: ['Left a note', 'info'], wa_reply: ['WhatsApp reply', 'info'], resubscribe: ['Resubscribed', ''],
 };
 const BTN: [string, string, string][] = [
   ['interested', 'I’m interested', 'ok'], ['book', 'Book 15 min', 'ok'], ['more', 'Send me more on this', 'accent'], ['share', 'Share', 'accent'], ['notnow', 'Not right now', 'gray'], ['unsubscribe', 'Unsubscribed', 'bad'],
@@ -94,14 +94,16 @@ export default async function Analytics({ params }: { params: Promise<{ id: stri
       </div>
 
       <section className="card" aria-labelledby="h-overview">
-        <div className="card-head"><h2 id="h-overview">Overview</h2><span className="hint">People with a personal link</span></div>
+        <div className="card-head"><h2 id="h-overview">Overview</h2><span className="hint">Share of delivered · people with a personal link</span></div>
         <div className="grid4 res-tiles">
           {funnel.map((f, i) => (
             <div key={f.k} className="stat-tile">
               <span className={`icon-chip ${f.tone}`} aria-hidden><Icon name={f.icon} size={16} /></span>
               <div className="sv">{f.n.toLocaleString('en-IN')}</div>
-              <div className="sk">{f.k}{i > 0 && delivered > 0 ? <span className="res-pct"> · {pct(f.n, delivered)}</span> : null}</div>
-              <div className="sm">{f.d}{i === 0 && failed ? ` · ${failed} failed` : ''}</div>
+              <div className="sk">{f.k}</div>
+              {i === 0
+                ? <><div className="sm res-pct">{f.d}</div>{failed ? <div className="sm">{failed} failed</div> : null}</>
+                : <><div className="sm res-pct">{delivered ? `${pct(f.n, delivered)} of delivered` : 'Nothing delivered yet'}</div><div className="sm">{f.d}</div></>}
             </div>
           ))}
         </div>

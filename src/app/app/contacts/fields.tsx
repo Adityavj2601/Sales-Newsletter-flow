@@ -18,7 +18,7 @@ export function ContactFields({ c, stage = true }: { c?: any; stage?: boolean })
     <label className="f"><span>Role</span><input className="in" name="role" defaultValue={c?.role || ''} placeholder="e.g. Head of Sales" /></label>
     <label className="f"><span>City</span><input className="in" name="city" defaultValue={c?.city || ''} /></label>
     <label className="f"><span>Tags <small>comma separated</small></span><input className="in" name="tags" defaultValue={c?.tags || ''} placeholder="pune, tier-1, event-2026" /></label>
-    {stage && <label className="f"><span>Stage</span><select className="in" name="stage" defaultValue={c?.stage || 'new'}>{Object.entries(STAGE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>}
+    {stage && <label className="f"><span>Stage</span><select className="in" name="stage" defaultValue={c?.stage || 'new'}>{Object.entries(STAGE_LABEL).filter(([k]) => k !== 'not_interested' || c?.stage === k).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>}
     <div className="full pfs-h">Consent</div>
     <div className="full pgroup">
       <Toggle name="email_consent" label="Agreed to receive email" on={c ? !!c.email_consent : false} />
